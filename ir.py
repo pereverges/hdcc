@@ -133,8 +133,8 @@ int *level_hv(int levels){
             }
         }
     }
-    free(span_hv);
-    free(threshold_hv);
+    //free(span_hv);
+    //free(threshold_hv);
     return hv;
 }
                 '''
@@ -187,7 +187,7 @@ int *multiset(int *a, int size){
             *(arr + j) += *(a + i*DIMENSIONS + j);
         }
     }
-    free(a);
+    //free(a);
     return arr;
 }
                 '''
@@ -250,7 +250,7 @@ void hard_quantize(int *arr, int size){
 int* encoding(float* x){
     int* f = forward(''' + self.weight_var+ ''',x,INPUT_DIM); 
     int* enc = ''' + self.encoding + ''';
-    free(f);
+    //free(f);
     hard_quantize(enc,1);
     return enc;
 }
@@ -393,7 +393,7 @@ void train_loop(float* train, int* label, float* classify, int size){
     for(i = 0; i < size; i++){
         int* enc = encoding((train + i*INPUT_DIM));
         update_weight(classify,enc,*(label + i));
-        free(enc);
+        //free(enc);
     }
     normalize(classify);
 }                
@@ -412,7 +412,7 @@ float test_loop(float* test, int* label, float* classify, int size){
     for(i = 0; i < size; i++){
         int* enc = encoding((test + i*INPUT_DIM));
         float *l = linear(enc,classify,CLASSES);
-        free(enc);
+        //free(enc);
         int index = argmax(l);
         if((int)index == (int)*(label+i)){
             correct_pred += 1;
