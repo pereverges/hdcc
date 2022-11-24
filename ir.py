@@ -622,7 +622,6 @@ void load_dataset(float* trainx, int* trainy, float* testx, int* testy){
     fclose(fp);
     if (line)
         free(line);
-    //print_matrix_d(trainx, TRAIN,INPUT_DIM);
 
 }               
                 '''
@@ -746,9 +745,9 @@ void load_dataset(float** trainx, int** trainy, float** testx, int** testy){
     def define_constants(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write('/*********** CONSTANTS ***********/\n')
-            file.write('int TRAIN;') # = ' + str(6238) + ';\n')
+            file.write('int TRAIN;\n') # ' + str(6238) + ';\n')
             #file.write('int TRAIN = ' + str(60000) + ';\n')
-            file.write('int TEST;') # + str(1559) + ';\n')
+            file.write('int TEST;\n') #= ' + str(1559) + ';\n')
             #file.write('int TEST = ' + str(10000) + ';\n')
             file.write('int SIZE = ' + str(1) + ';\n')
             file.write('int P = ' + str(50) + ';\n')
@@ -853,7 +852,8 @@ int main() {
                 str(self.define_embeddings())
                 +
                 '''
-                
+            
+        
     float *trainx = (float *)malloc(TRAIN * INPUT_DIM * sizeof(float));
     float *testx = (float *)malloc(TEST * INPUT_DIM * sizeof(float));
     int *trainy = (int *)malloc(TRAIN * 1 * sizeof(int));
@@ -875,17 +875,14 @@ int main() {
                 '''
 int main(int argc, char **argv) {
     srand(42);
-
+    TRAIN = atoi(argv[1]);
+    TEST = atoi(argv[2]);
     float *WEIGHT = weights();
     '''
                 +
                 str(self.define_embeddings())
                 +
                 '''
-                
-    TRAIN = argv[1]
-    TEST = argv[2]
-    
     float *trainx = (float *)malloc(TRAIN * INPUT_DIM * sizeof(float));
     float *testx = (float *)malloc(TEST * INPUT_DIM * sizeof(float));
     int *trainy = (int *)malloc(TRAIN * 1 * sizeof(int));

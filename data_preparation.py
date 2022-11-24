@@ -23,5 +23,6 @@ def voicehd():
     labels = df[df.columns[-1]]
     data.to_csv(name+'_data', index=False, header=False)
     labels.to_csv(name+'_labels', index=False, header=False)
+    print(name+'_data')
 
-mnist()
+voicehd()
