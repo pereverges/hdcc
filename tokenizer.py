@@ -1,0 +1,93 @@
+# --- Tokenizer
+
+# TOKEN NAMES
+
+reserved = {
+    'RANDOM',
+    'LEVEL',
+    'BIND',
+    'BUNDLE',
+    'MULTISET'
+}
+
+
+tokens = (
+    'NAME',
+
+    'EMBEDDING',
+    'ID',
+    'RANDOM',
+    'LEVEL',
+    'NUMBER',
+
+    'ENCODING',
+    'DIMENSIONS',
+    'CLASSES',
+
+    'BIND',
+    'BUNDLE',
+    'MULTISET',
+
+    'LPAREN',
+    'RPAREN',
+    'LSBRAQ',
+    'RSBRAQ',
+
+    'SEMICOLON',
+    'COLON'
+)
+
+# REGULAR EXPRESSIONS ASSIGNED TO EACH TOKEN
+
+# Ignored characters
+t_ignore = ' \t'
+
+# Token matching rules are written as regexs
+
+t_NAME = r'.NAME'
+
+t_EMBEDDING = r'.EMBEDDING'
+t_RANDOM = r'RANDOM'
+t_LEVEL = r'LEVEL'
+t_LPAREN = r'\('
+t_RPAREN = r'\)'
+t_SEMICOLON = r'\;'
+t_COLON = r'\,'
+t_LSBRAQ = r'\['
+t_RSBRAQ = r'\]'
+t_DIMENSIONS = r'.DIMENSIONS'
+t_ENCODING = r'.ENCODING'
+t_BIND = r'BIND'
+t_CLASSES = r'.CLASSES'
+
+def t_COMMENT(t):
+    r'\//.*'
+    r'\/*.*'
+    r'\*/.*'
+    pass
+
+def t_ID(t):
+    r'[a-zA-Z_][a-zA-Z_0-9]*'
+    reserved_type = t.value in reserved
+    if reserved_type:
+        t.type = t.value
+        return t
+    return t
+
+
+# A function can be used if there is an associated action.
+# Write the matching regex in the docstring.
+def t_NUMBER(t):
+    r'\d+'
+    t.value = int(t.value)
+    return t
+
+# Ignored token with an action associated with it
+def t_ignore_newline(t):
+    r'\n+'
+    t.lexer.lineno += t.value.count('\n')
+
+# Error handler for illegal characters
+def t_error(t):
+    print("Illegal character '%s'" % t.value[0])
+    t.lexer.skip(1)
