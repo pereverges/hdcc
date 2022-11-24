@@ -181,7 +181,7 @@ int *bundle(int *a, int *b){
                 '''
 int *multiset(int *a, int size){
     int i, j;
-    int *arr = (int *)malloc(size * DIMENSIONS * sizeof(int));
+    int *arr = (int *)calloc(size * DIMENSIONS, sizeof(int));
     for(i = 0; i < size; i++){
         for(j = 0; j < DIMENSIONS; ++j){
             *(arr + j) += *(a + i*DIMENSIONS + j);
@@ -306,7 +306,7 @@ float* map_range_clamp(float* arr, int rows, int cols, float in_min, float in_ma
             file.write(
                 '''
 float* weights(){
-    float *arr = (float *)malloc(CLASSES * DIMENSIONS * sizeof(float));
+    float *arr = (float *)calloc(CLASSES * DIMENSIONS, sizeof(float));
     return arr;
 }
                 '''
@@ -333,7 +333,7 @@ void update_weight(float* weights, int* encoding, int feature){
                 '''
 float* linear(int* m1, float* m2, int s1){
     int i, j, k;
-    float *arr = (float *)malloc(s1 * CLASSES * sizeof(float));
+    float *arr = (float *)calloc(s1 * CLASSES, sizeof(float));
     for (i = 0; i < s1; ++i) {
        for (j = 0; j < CLASSES; ++j) {
           for (k = 0; k < DIMENSIONS; ++k) {
