@@ -17,7 +17,7 @@ class IntermediateRepresentation:
             file.write('CC=gcc' + '\n')
             file.write('CFLAGS=-I.' + '\n')
             file.write(self.name + ': ' + self.name + doto + '\n')
-            file.write('\t$(CC) -o ' + self.name + ' ' + self.name + doto + '-lm\n')
+            file.write('\t$(CC) -o ' + self.name + ' ' + self.name + doto + ' -lm\n')
 
     # ------------------- AUXILIARY FUNCTIONS ------------------- #
 
