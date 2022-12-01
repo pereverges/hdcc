@@ -7,7 +7,10 @@ reserved = {
     'LEVEL',
     'BIND',
     'BUNDLE',
-    'MULTISET'
+    'MULTISET',
+    'DEBUG',
+    'TRUE',
+    'FALSE'
 }
 
 
@@ -19,6 +22,7 @@ tokens = (
     'RANDOM',
     'LEVEL',
     'NUMBER',
+    'DEBUG',
 
     'ENCODING',
     'DIMENSIONS',
@@ -34,7 +38,10 @@ tokens = (
     'RSBRAQ',
 
     'SEMICOLON',
-    'COLON'
+    'COLON',
+
+    'TRUE',
+    'FALSE'
 )
 
 # REGULAR EXPRESSIONS ASSIGNED TO EACH TOKEN
@@ -59,6 +66,9 @@ t_DIMENSIONS = r'.DIMENSIONS'
 t_ENCODING = r'.ENCODING'
 t_BIND = r'BIND'
 t_CLASSES = r'.CLASSES'
+t_DEBUG = r'.DEBUG'
+t_TRUE = r'TRUE'
+t_FALSE = r'FALSE'
 
 def t_COMMENT(t):
     r'\//.*'

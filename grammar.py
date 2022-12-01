@@ -51,6 +51,18 @@ def p_embedding_directive(p):
     '''directive : EMBEDDING embeddings '''
     p[0] = astDirective(action='EMBEDDING', params=[p.lineno(1), p[2]])
 
+def p_debug(p):
+    '''directive : DEBUG bool'''
+    p[0] = astDirective(action='DEBUG', params=[p.lineno(1), p[2]])
+
+def p_true(p):
+    '''bool : TRUE'''
+    p[0] = p[1]
+
+def p_false(p):
+    '''bool : FALSE'''
+    p[0] = p[1]
+
 def p_embeddings_list(p):
     '''embeddings : value_embedding
                   | value '''

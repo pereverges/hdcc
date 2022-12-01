@@ -1,6 +1,6 @@
 class IntermediateRepresentation:
 
-    def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings):
+    def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun, encoding_fun_call):
         self.name = name
         self.classes = classes
         self.dimensions = dimensions
@@ -8,6 +8,9 @@ class IntermediateRepresentation:
         self.weight_var = weight_var
         self.encoding = encoding
         self.embeddings = embeddings
+        self.debug = debug
+        self.encoding_fun = encoding_fun
+        self.encoding_fun_call = encoding_fun_call
 
     # ------------------- DEFINE MAKEFILE ------------------- #
 
@@ -174,6 +177,25 @@ int *bundle(int *a, int *b){
                 '''
             )
 
+    def multiset_bind(self):
+        """Bundles two hypervectors together"""
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+int *multiset_bind(int *a, int *b, float* indices, int size){
+    int i, j;
+    int *arr = (int *)malloc(size * DIMENSIONS * sizeof(int));
+    for(i = 0; i < size; ++i){
+        for(j = 0; j < DIMENSIONS; j++){
+            *(arr + j ) += *(a + (DIMENSIONS * i) + j) * *(b + (int)*(indices + i) *DIMENSIONS + j);
+        }
+    }
+    return arr;
+}
+                '''
+            )
+
+
     def multiset(self):
         """Bundles a set of hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
@@ -187,7 +209,7 @@ int *multiset(int *a, int size){
             *(arr + j) += *(a + i*DIMENSIONS + j);
         }
     }
-    //free(a);
+    free(a);
     return arr;
 }
                 '''
@@ -244,18 +266,30 @@ void hard_quantize(int *arr, int size){
         """Generates the encoding"""
         # TODO: generalize method, think how to set the dimensions depending of bind, bundle, and forward
         with open(self.name.lower() + '.c', 'a') as file:
-
             file.write(
-                '''
+'\n' +
+self.encoding_fun + '''
 int* encoding(float* x){
-    int* f = forward(''' + self.weight_var+ ''',x,INPUT_DIM); 
-    int* enc = ''' + self.encoding + ''';
-    //free(f);
+    ''' + self.encoding_fun_call + '''
     hard_quantize(enc,1);
     return enc;
 }
                     '''
             )
+
+    def generate_encoding2(self):
+            """Generates the encoding"""
+            # TODO: generalize method, think how to set the dimensions depending of bind, bundle, and forward
+            with open(self.name.lower() + '.c', 'a') as file:
+                file.write(
+                    '''
+int* encoding(float* x){
+    int* enc = multiset_bind(ID,''' + self.weight_var+ ''',x,INPUT_DIM);
+    hard_quantize(enc,1);
+    return enc;
+}
+                        '''
+                )
 
     # ------------------- MATH FUNCTIONS ------------------- #
 
@@ -284,14 +318,14 @@ int argmax(float* classify){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-float* map_range_clamp(float* arr, int rows, int cols, float in_min, float in_max, float out_min, float out_max){
-   float *res = (float *)malloc(rows * cols * sizeof(float));
+float** map_range_clamp(float* arr[], int rows, int cols, float in_min, float in_max, float out_min, float out_max, float* res[]){
    int i, j;
    for (i = 0; i < rows; i++){
       for (j = 0; j < cols; j++){
-        float map_range = round(out_min + (out_max - out_min) * (*(arr + i*cols + j) - in_min) / (in_max - in_min));
-        *(res + i*cols + j) = min(max(map_range,out_min),out_max);
+        float map_range = round(out_min + (out_max - out_min) * (*(arr[i] + j) - in_min) / (in_max - in_min));
+        *(res[i] + j) = min(max(map_range,out_min),out_max);
       }
+      free(arr[i]);
    }
    return res;
 }
@@ -331,18 +365,17 @@ void update_weight(float* weights, int* encoding, int feature){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-float* linear(int* m1, float* m2, int s1){
-    int i, j, k;
-    float *arr = (float *)calloc(s1 * CLASSES, sizeof(float));
-    for (i = 0; i < s1; ++i) {
-       for (j = 0; j < CLASSES; ++j) {
-          for (k = 0; k < DIMENSIONS; ++k) {
-             *(arr + i*s1 + j) += (float)*(m1 + i*DIMENSIONS + k) * *(m2 + j*DIMENSIONS + k);
-          }
-       }
-    }
+float* linear(int* m1, float* m2){
+    int j, k;
+
+    float *arr = (float *)calloc(CLASSES, sizeof(float));
+    for (j = 0; j < DIMENSIONS; ++j) {
+      for (k = 0; k < CLASSES; ++k) {
+         *(arr + k) += (float)*(m1 + j) * *(m2 + k*DIMENSIONS + j);
+      }
+   }
     return arr;
-}      
+}           
                 '''
             )
 
@@ -387,13 +420,18 @@ void normalize(float* weight){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-void train_loop(float* train, int* label, float* classify, int size){
-    train = map_range_clamp(train,TRAIN,INPUT_DIM,0,1,0,''' + self.weight_var+'_DIM' + '''-1);
+void train_loop(float* train[], int* label[], float* classify, int size){
+    float *res[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        res[i] = (float *)malloc(INPUT_DIM * sizeof(float));
+    }
+    map_range_clamp(train,TRAIN,INPUT_DIM,0,1,0,''' + self.weight_var+'_DIM' + '''-1,res);
     int i;
     for(i = 0; i < size; i++){
-        int* enc = encoding((train + i*INPUT_DIM));
-        update_weight(classify,enc,*(label + i));
-        //free(enc);
+        int* enc = encoding(res[i]);
+        update_weight(classify,enc,*(label[i]));
+        free(res[i]);
+        free(enc);
     }
     normalize(classify);
 }                
@@ -405,18 +443,22 @@ void train_loop(float* train, int* label, float* classify, int size){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-float test_loop(float* test, int* label, float* classify, int size){
-    test = map_range_clamp(test,TEST,INPUT_DIM,0,1,0,''' + self.weight_var+'_DIM' + '''-1);
+float test_loop(float* test[], int* label[], float* classify, int size){
+    float *res[TEST];
+    for (int i = 0; i < TEST; i++){
+        res[i] = (float *)malloc(INPUT_DIM * sizeof(float));
+    }
+    map_range_clamp(test,TEST,INPUT_DIM,0,1,0,''' + self.weight_var+'_DIM' + '''-1,res);
     int i;
     int correct_pred = 0;
     for(i = 0; i < size; i++){
-        int* enc = encoding((test + i*INPUT_DIM));
-        float *l = linear(enc,classify,CLASSES);
-        //free(enc);
+        int* enc = encoding(res[i]);
+        float *l = linear(enc,classify);
         int index = argmax(l);
-        if((int)index == (int)*(label+i)){
+        if((int)index == (int)*(label[i])){
             correct_pred += 1;
         }
+        free(l);
     }
     return correct_pred/(float)TEST;
 }                
@@ -632,7 +674,7 @@ void load_dataset(float* trainx, int* trainy, float* testx, int* testy){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-void load_data(float* data, char* path){
+void load_data(float* data[], char* path){
     FILE * fp;
     char * line = NULL;
     size_t len = 0;
@@ -647,7 +689,7 @@ void load_data(float* data, char* path){
     while ((read = getline(&line, &len, fp)) != -1) {
         token = strtok(line, ",");
         for (int i = 0; i < INPUT_DIM; i++){
-          *(data + count * INPUT_DIM + i) = (float) atof(token);
+          *(data[count] + i) = (float) atof(token);
           token = strtok(NULL, ",");
         }
         count += 1;
@@ -663,7 +705,7 @@ void load_data(float* data, char* path){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-void load_label(int* data, char* path){
+void load_label(int* data[], char* path){
     FILE * fp;
     char * line = NULL;
     size_t len = 0;
@@ -676,14 +718,14 @@ void load_label(int* data, char* path){
     char* token;
     int count = 0;
     while ((read = getline(&line, &len, fp)) != -1) {
-        *(data + count) = atoi(line);
+        *(data[count]) = atoi(line);
         count += 1;
     }
     fclose(fp);
     if (line)
         free(line);
 
-}                
+}           
                 '''
             )
 
@@ -735,6 +777,8 @@ void load_dataset(float** trainx, int** trainy, float** testx, int** testy){
             file.write('#include <stdint.h>\n')
             file.write('#include <string.h>\n')
             file.write('#include <math.h>\n')
+            if self.debug:
+                file.write('#include <time.h>\n')
             file.write('#ifndef max\n')
             file.write('#define max(a,b) (((a) > (b)) ? (a) : (b))\n')
             file.write('#endif\n')
@@ -789,9 +833,9 @@ void load_dataset(float** trainx, int** trainy, float** testx, int** testy){
 
         self.random_hv()
         self.level_hv()
-        self.bind()
-        self.bundle()
-        self.multiset()
+        #self.bind()
+        #self.bundle()
+        #self.multiset()
 
         self.create_weights()
         self.update_weights()
@@ -799,7 +843,7 @@ void load_dataset(float** trainx, int** trainy, float** testx, int** testy){
         self.norm2()
         self.normalize()
         self.argmax()
-        self.forward()
+        #self.forward()
         self.map_range_clamp()
         self.hard_quantize()
         self.generate_encoding()
@@ -807,7 +851,11 @@ void load_dataset(float** trainx, int** trainy, float** testx, int** testy){
         self.train()
         self.test()
 
-        self.general_main()
+        if self.debug:
+            self.debug_main()
+        else:
+            self.general_main()
+
 
 
 
@@ -826,8 +874,25 @@ void load_dataset(float** trainx, int** trainy, float** testx, int** testy){
                 +
                 '''
     
-    float *trainx, *testx;
-    int *trainy, *testy;
+    float *train_data[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        train_data[i] = (float *)malloc(INPUT_DIM * sizeof(float));
+    }
+
+    int *train_labels[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        train_labels[i] = (int *)malloc(1 * sizeof(int));
+    }
+
+    float *test_data[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        test_data[i] = (float *)malloc(INPUT_DIM * sizeof(float));
+    }
+
+    int *test_labels[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        test_labels[i] = (int *)malloc(1 * sizeof(int));
+    }
     
     load_dataset(&trainx, &trainy, &testx, &testy);
     
@@ -874,7 +939,6 @@ int main() {
             file.write(
                 '''
 int main(int argc, char **argv) {
-    srand(42);
     TRAIN = atoi(argv[1]);
     TEST = atoi(argv[2]);
     float *WEIGHT = weights();
@@ -883,19 +947,85 @@ int main(int argc, char **argv) {
                 str(self.define_embeddings())
                 +
                 '''
-    float *trainx = (float *)malloc(TRAIN * INPUT_DIM * sizeof(float));
-    float *testx = (float *)malloc(TEST * INPUT_DIM * sizeof(float));
-    int *trainy = (int *)malloc(TRAIN * 1 * sizeof(int));
-    int *testy = (int *)malloc(TEST * 1 * sizeof(int));
+    float *train_data[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        train_data[i] = (float *)malloc(INPUT_DIM * sizeof(float));
+    }
+
+    int *train_labels[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        train_labels[i] = (int *)malloc(1 * sizeof(int));
+    }
+
+    float *test_data[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        test_data[i] = (float *)malloc(INPUT_DIM * sizeof(float));
+    }
+
+    int *test_labels[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        test_labels[i] = (int *)malloc(1 * sizeof(int));
+    }
     
-    load_data(trainx, argv[3]);
-    load_data(testx, argv[5]);
-    load_label(trainy, argv[4]);
-    load_label(testy, argv[6]);
+    load_data(train_data, argv[3]);
+    load_data(test_data, argv[5]);
+    load_label(train_labels, argv[4]);
+    load_label(test_labels, argv[6]);
     
-    train_loop(trainx, trainy, WEIGHT,TRAIN);
-    float acc = test_loop(testx,testy,WEIGHT,TEST);
+    train_loop(train_data, train_labels, WEIGHT,TRAIN);
+    float acc = test_loop(test_data,test_labels,WEIGHT,TEST);
     printf("acc %f ", acc);  
+}              
+                '''
+            )
+
+    def debug_main(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+int main(int argc, char **argv) {
+    TRAIN = atoi(argv[1]);
+    TEST = atoi(argv[2]);
+    float *WEIGHT = weights();
+    '''
+                +
+                str(self.define_embeddings())
+                +
+                '''
+    float *train_data[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        train_data[i] = (float *)malloc(INPUT_DIM * sizeof(float));
+    }
+
+    int *train_labels[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        train_labels[i] = (int *)malloc(1 * sizeof(int));
+    }
+
+    float *test_data[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        test_data[i] = (float *)malloc(INPUT_DIM * sizeof(float));
+    }
+
+    int *test_labels[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        test_labels[i] = (int *)malloc(1 * sizeof(int));
+    }
+
+    load_data(train_data, argv[3]);
+    load_data(test_data, argv[5]);
+    load_label(train_labels, argv[4]);
+    load_label(test_labels, argv[6]);
+
+    clock_t t;
+    t = clock();
+    printf("Start\\n");
+    train_loop(train_data, train_labels, WEIGHT,TRAIN);
+    float acc = test_loop(test_data,test_labels,WEIGHT,TEST);
+    t = clock() - t;
+    double time_taken = ((double)t)/CLOCKS_PER_SEC; // calculate the elapsed time
+    printf("The program took %f seconds to execute\\n", time_taken);
+    printf("acc %f \\n", acc);
 }              
                 '''
             )

@@ -25,4 +25,4 @@ def voicehd():
     labels.to_csv(name+'_labels', index=False, header=False)
     print(name+'_data')
 
-voicehd()
+mnist()
