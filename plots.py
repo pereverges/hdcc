@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-time = pd.read_csv('plot_data/exec_time.csv')
+time = pd.read_csv('plot_data/memory_intrinsics.csv')
 time = time.groupby('dimensions').mean().plot(title="Execution time", xlabel='Dimensions', ylabel='Time(s)')
 
 memory = pd.read_csv('plot_data/memory.csv')
