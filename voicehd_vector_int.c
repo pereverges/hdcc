@@ -5,6 +5,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+
 #ifndef max
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 #endif
@@ -18,21 +19,22 @@ int SIZE = 1;
 int P = 50;
 int DIMENSIONS = 1024;
 int CLASSES = 27;
-int S = 1024;
-typedef float f4si __attribute__ ((vector_size (1024)));
+int S = 128;
+typedef float f4si __attribute__ ((vector_size (128)));
+typedef int i4si __attribute__ ((vector_size (128)));
 int BATCH;
 int NUM_BATCH;
 int first = 0;
-f4si* VALUE;
+i4si* VALUE;
 int VALUE_DIM = 100;
-f4si* ID;
+i4si* ID;
 int INPUT_DIM = 617;
 
-void print_matrix_d(float* arr, int rows, int cols){
+void print_matrix_d(int* arr, int rows, int cols){
     int i, j;
     for (i = 0; i < rows; i++) {
       for (j = 0; j < cols; j++) {
-         printf("%f ", *(arr + i*cols + j));
+         printf("%d ", *(arr + i*cols + j));
       }
       printf("\n");
     }
@@ -73,9 +75,10 @@ void load_data(float* data[], char* path){
 
     char* token;
     int count = 0;
+    int i;
     while ((read = getline(&line, &len, fp)) != -1) {
         token = strtok(line, ",");
-        for (int i = 0; i < INPUT_DIM; i++){
+        for (i = 0; i < INPUT_DIM; i++){
           *(data[count] + i) = (float) atof(token);
           token = strtok(NULL, ",");
         }
@@ -86,7 +89,7 @@ void load_data(float* data[], char* path){
         free(line);
 }
 
-void load_label(float* data[], char* path){
+void load_label(int* data[], char* path){
     FILE * fp;
     char * line = NULL;
     size_t len = 0;
@@ -108,8 +111,8 @@ void load_label(float* data[], char* path){
 
 }
 
-f4si *random_hv(int size){
-   f4si *arr = malloc(size * DIMENSIONS * sizeof(float));
+i4si *random_hv(int size){
+   i4si *arr = malloc(size * DIMENSIONS * sizeof(int));
    int i, j, k;
    for (i = 0; i < size; i++){
       for (j = 0; j < NUM_BATCH; j++){
@@ -121,14 +124,12 @@ f4si *random_hv(int size){
    return arr;
 }
 
-f4si *level_hv(int levels){
+i4si *level_hv(int levels){
     int levels_per_span = levels-1;
     int span = 1;
-    f4si *span_hv = random_hv(span+1);
-
-
+    i4si *span_hv = random_hv(span+1);
     f4si *threshold_hv = random_vector(span,0,1);
-    f4si *hv = malloc(levels * DIMENSIONS * sizeof(float));
+    i4si *hv = (i4si *)malloc(levels * DIMENSIONS * sizeof(int));
 
     int i, j, k;
     for(i = 0; i < levels; i++){
@@ -151,21 +152,21 @@ float* weights(){
     return arr;
 }
 
-void update_weight_p(float* weights, float* encoding, int feature){
+void update_weight_p(float* weights, int* encoding, int feature){
     int i;
     for(i = 0; i < DIMENSIONS; i++){
          *(weights + feature*DIMENSIONS + i) += (float)*(encoding + i);
     }
 }
 
-void update_weight(float* weights, float* encoding, int feature){
+void update_weight(float* weights, int* encoding, int feature){
     int i;
     for(i = 0; i < DIMENSIONS; i++){
         *(weights + feature*DIMENSIONS + i) += (float)*(encoding + i);
     }
 }
 
-float* linear(float* m1, float* m2){
+float* linear(int* m1, float* m2){
     int j, k;
 
     float *arr = (float *)calloc(CLASSES, sizeof(float));
@@ -222,7 +223,7 @@ float** map_range_clamp(float* arr[], int rows, int cols, float in_min, float in
    return res;
 }
 
-void hard_quantize(float *arr, int size){
+void hard_quantize(int *arr, int size){
    int i, j;
    for (i = 0; i < size; i++){
       for (j = 0; j < DIMENSIONS; j++){
@@ -236,9 +237,9 @@ void hard_quantize(float *arr, int size){
    }
 }
 
-f4si *encode_fun(f4si *ID, f4si *VALUE, float* indices, int size){
+i4si *encode_fun(i4si *ID, i4si *VALUE, float* indices, int size){
     int i, j;
-    f4si *arr = malloc(DIMENSIONS * sizeof(float));
+    i4si *arr = malloc(DIMENSIONS * sizeof(int));
     for(i = 0; i < size; ++i){
         for(j = 0; j < NUM_BATCH; j++){
             arr[j] += ID[i*NUM_BATCH+j] * (VALUE[(int)indices[i]*NUM_BATCH+j]);
@@ -247,9 +248,9 @@ f4si *encode_fun(f4si *ID, f4si *VALUE, float* indices, int size){
     return arr;
 }
 
-f4si *encode_fun_p(f4si *ID, f4si *VALUE, float* indices, int size){
+i4si *encode_fun_p(i4si *ID, i4si *VALUE, float* indices, int size){
     int i, j;
-    f4si *arr = malloc(DIMENSIONS * sizeof(float));
+    i4si *arr = malloc(DIMENSIONS * sizeof(int));
     for(i = 0; i < size; ++i){
         for(j = 0; j < NUM_BATCH; j++){
             arr[j] += ID[i*NUM_BATCH+j] * (VALUE[(int)indices[i]*NUM_BATCH+j]);
@@ -258,28 +259,24 @@ f4si *encode_fun_p(f4si *ID, f4si *VALUE, float* indices, int size){
     return arr;
 }
 
-float* encoding_p(float* x){
-    float* enc = (float*)encode_fun_p(ID, VALUE, x ,INPUT_DIM);
+int* encoding(float* x){
+    int* enc = (int*)encode_fun(ID, VALUE, x ,INPUT_DIM);
     hard_quantize(enc,1);
     return enc;
 }
 
-float* encoding(float* x){
-    float* enc = (float*)encode_fun(ID, VALUE, x ,INPUT_DIM);
-    hard_quantize(enc,1);
-    return enc;
-}
-
-void train_loop(float* train[], float* label[], float* classify, int size){
+void train_loop(float* train[], int* label[], float* classify, int size){
     float *res[TRAIN];
-    for (int i = 0; i < TRAIN; i++){
+    int i;
+    for (i = 0; i < TRAIN; i++){
         res[i] = (float *)malloc(INPUT_DIM * sizeof(float));
     }
     map_range_clamp(train,TRAIN,INPUT_DIM,0,1,0,VALUE_DIM-1,res);
-    int i;
     for(i = 0; i < size; i++){
-        float* enc;
-        enc = encoding(res[i]);
+        int* enc = encoding(res[i]);
+        if (i == 3){
+            //(enc,1,DIMENSIONS);
+        }
         update_weight(classify,enc,(int)*(label[i]));
         free(res[i]);
         free(enc);
@@ -287,16 +284,19 @@ void train_loop(float* train[], float* label[], float* classify, int size){
     normalize(classify);
 }
 
-float test_loop(float* test[], float* label[], float* classify, int size){
+float test_loop(float* test[], int* label[], float* classify, int size){
     float *res[TEST];
-    for (int i = 0; i < TEST; i++){
+    int i;
+    for (i = 0; i < TEST; i++){
         res[i] = (float *)malloc(INPUT_DIM * sizeof(float));
     }
     map_range_clamp(test,TEST,INPUT_DIM,0,1,0,VALUE_DIM-1,res);
-    int i;
     int correct_pred = 0;
     for(i = 0; i < size; i++){
-        float* enc = encoding(res[i]);
+        int* enc = encoding(res[i]);
+        if (i == 3){
+            //print_matrix_d(enc,1,DIMENSIONS);
+        }
         float *l = linear(enc,classify);
         int index = argmax(l);
         if (i == 3){
@@ -305,12 +305,13 @@ float test_loop(float* test[], float* label[], float* classify, int size){
         if((int)index == (int)*(label[i])){
             correct_pred += 1;
         }
+        free(res[i]);
+        free(enc);
         free(l);
     }
     printf("\n");
     return correct_pred/(float)TEST;
 }
-
 
 int main(int argc, char **argv) {
     srand(42);
@@ -322,26 +323,26 @@ int main(int argc, char **argv) {
     float *WEIGHT = weights();
 
     VALUE = level_hv(VALUE_DIM);
-    f4si a = VALUE[0]*VALUE[0];
     ID = random_hv(INPUT_DIM);
     float *train_data[TRAIN];
-    for (int i = 0; i < TRAIN; i++){
+    int i;
+    for (i = 0; i < TRAIN; i++){
         train_data[i] = (float *)malloc(INPUT_DIM * sizeof(float));
     }
 
-    float *train_labels[TRAIN];
-    for (int i = 0; i < TRAIN; i++){
-        train_labels[i] = (float *)malloc(1 * sizeof(float));
+    int *train_labels[TRAIN];
+    for (i = 0; i < TRAIN; i++){
+        train_labels[i] = (int *)malloc(1 * sizeof(int));
     }
 
     float *test_data[TRAIN];
-    for (int i = 0; i < TRAIN; i++){
+    for (i = 0; i < TRAIN; i++){
         test_data[i] = (float *)malloc(INPUT_DIM * sizeof(float));
     }
 
-    float *test_labels[TRAIN];
-    for (int i = 0; i < TRAIN; i++){
-        test_labels[i] = (float *)malloc(1 * sizeof(float));
+    int *test_labels[TRAIN];
+    for (i = 0; i < TRAIN; i++){
+        test_labels[i] = (int *)malloc(1 * sizeof(int));
     }
 
     load_data(train_data, argv[3]);
