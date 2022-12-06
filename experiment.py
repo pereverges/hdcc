@@ -4,7 +4,7 @@ import subprocess
 
 dimensions = [64, 128, 512, 1024, 4096, 10240]
 files = ['mnist', 'voicehd']
-repetitions = 5
+repetitions = 4
 
 for file in files:
     with open("output.txt", "a") as output:
