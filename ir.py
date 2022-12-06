@@ -1055,7 +1055,6 @@ void load_dataset(float** trainx, int** trainy, float** testx, int** testy){
             file.write(
                 '''
     int main() {
-    srand(42);
     
     float *WEIGHT = weights();
     '''
@@ -1216,14 +1215,12 @@ int main(int argc, char **argv) {
     struct timespec begin, end;
     double elapsed;
     clock_gettime(CLOCK_MONOTONIC, &begin);
-    printf("Start\\n");
     train_loop(train_data, train_labels, WEIGHT,TRAIN);
     float acc = test_loop(test_data,test_labels,WEIGHT,TEST);
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = end.tv_sec - begin.tv_sec;
     elapsed += (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
-    printf("Time: %f\\n",elapsed);
-    printf("Accuracy: %f \\n", acc); 
+    printf("%d, %f, %f \\n", DIMENSIONS,elapsed, acc);
 }              
                 '''
             )

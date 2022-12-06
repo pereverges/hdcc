@@ -1,4 +1,4 @@
 CC=gcc
 CFLAGS=-I.
-mnist: mnist.o
-	$(CC) -o mnist mnist.o -lm -O3
+mnist64: mnist64.o
+	$(CC) -o mnist64 mnist64.o -lm -O3
