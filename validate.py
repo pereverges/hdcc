@@ -24,8 +24,8 @@ class hdccAST:
         if i[1] == 'BIND':
             self.multibind = True
             if self.unpack_encoding(i[2])[1] not in self.used_vars:
-                return 'bind(' + self.unpack_encoding(i[2])[0] + ',' + self.unpack_encoding(i[3])[0] + ',INPUT_DIM' + ')', self.unpack_encoding(i[3])[1] + ' + (DIMENSIONS * i) + j) * *(' + self.unpack_encoding(i[2])[1] + '*DIMENSIONS + j', 'bind'
-            return 'bind(' + self.unpack_encoding(i[2])[0] + ',' + self.unpack_encoding(i[3])[0] + ',INPUT_DIM' + ')', self.unpack_encoding(i[2])[1] + ' + (DIMENSIONS * i) + j) * *(' + self.unpack_encoding(i[3])[1] + '*DIMENSIONS + j', 'bind'
+                return 'bind(' + self.unpack_encoding(i[2])[0] + ',' + self.unpack_encoding(i[3])[0] + ',INPUT_DIM' + ')', self.unpack_encoding(i[3])[1] + '(NUM_BATCH * i) + j] * (' + self.unpack_encoding(i[2])[1] + '* NUM_BATCH + j])', 'bind'
+            return 'bind(' + self.unpack_encoding(i[2])[0] + ',' + self.unpack_encoding(i[3])[0] + ',INPUT_DIM' + ')', self.unpack_encoding(i[2])[1] + ' +(NUM_BATCH * i) + j] * (' + self.unpack_encoding(i[3])[1] + '* NUM_BATCH + j])', 'bind'
         elif i[1] == 'BUNDLE':
             return 'bundle(' + self.unpack_encoding(i[1][2])[0] + ',' + 'INPUT_DIM' + ')', '', 'bundle'
         elif i[1] == 'MULTISET':
@@ -34,8 +34,8 @@ class hdccAST:
         else:
             self.set_used_var(i)
             if i == self.weight:
-                return self.weight, ''+self.weight+' + (int)*(indices + i)', 'var'
-            return i.upper(), i.upper(), 'var'
+                return self.weight, ''+self.weight+'[(int)indices[i]', 'var'
+            return i.upper(), i.upper()+'[', 'var'
 
     def set_used_var(self, var):
         self.used_vars.add(var)
@@ -54,11 +54,11 @@ class hdccAST:
             self.declared_vars.add(params[1][2])
 
     def encoding_build(self, var, t):
-        var = '*(' + var + ')'
+        # var = '*(' + var + ')'
         if t == 'multiset':
-            var = '*(arr + j ) += ' + var + ';'
+            var = 'arr[j] += ' + var + ';'
         else:
-            var = ' *(arr + (DIMENSIONS*i) + j ) = ' + var + ';'
+            var = ' arr[(DIMENSIONS*i) + j] = ' + var + ';'
 
         fun_vars = ''
         fun_call_vars = ''
@@ -66,14 +66,19 @@ class hdccAST:
             fun_vars += 'int *' + i + ', '
             fun_call_vars += i + ', '
 
-        fun_head = 'int *encode_fun(' + fun_vars + 'float* indices, int size){'
-        if self.multiset and not self.multibind:
+        # fun_head = 'int *encode_fun(' + fun_vars + 'float* indices, int size){'
+        fun_head = 'void* encode_fun(void* arg){'
+        if self.multiset and self.multibind:
             self.encoding_fun = fun_head + '''
+    int index = ((struct arg_struct*)arg) -> split_start;
+    float* indices = ((struct arg_struct*)arg) -> indices;
     int i, j;
-    int *arr = (int *)malloc(DIMENSIONS * sizeof(int));
-    for(i = 0; i < size; ++i){
-        for(j = 0; j < DIMENSIONS; j++){
-        ''' + var + '''
+    f4si *arr = calloc(DIMENSIONS, sizeof(int));
+    for(i = index; i < SPLIT_SIZE+index; ++i){
+        if (index < INPUT_DIM){
+            for(j = 0; j < NUM_BATCH; j++){
+                ''' + var + '''
+            }
         }
     }
     return arr;
@@ -82,17 +87,21 @@ class hdccAST:
 
         else:
             self.encoding_fun = fun_head + '''
+    int index = ((struct arg_struct*)arg) -> split_start;
+    float* indices = ((struct arg_struct*)arg) -> indices;
     int i, j;
-    int *arr = (int *)malloc(DIMENSIONS * size * sizeof(int));
-    for(i = 0; i < size; ++i){
-        for(j = 0; j < DIMENSIONS; j++){
-            ''' + var + '''
+    f4si *arr = calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
+    for(i = index; i < SPLIT_SIZE+index; ++i){
+        if (index < INPUT_DIM){
+            for(j = 0; j < NUM_BATCH; j++){
+                ''' + var + '''
+            }
         }
     }
     return arr;
 }
                 '''
-        self.encoding_fun_call = 'int* enc = encode_fun(' + fun_call_vars + 'x ,INPUT_DIM);'
+        self.encoding_fun_call = 'int* enc = encode_thread_creation(x);'
 
     def validateDirective(self, x):
         action, params = self.astDirective.resolve(x)

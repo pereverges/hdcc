@@ -20,7 +20,7 @@ class IntermediateRepresentation:
             file.write('CC=gcc' + '\n')
             file.write('CFLAGS=-I.' + '\n')
             file.write(self.name + ': ' + self.name + doto + '\n')
-            file.write('\t$(CC) -o ' + self.name + ' ' + self.name + doto + ' -lm\n')
+            file.write('\t$(CC) -o ' + self.name + ' ' + self.name + doto + ' -lm -O3\n')
 
     # ------------------- AUXILIARY FUNCTIONS ------------------- #
 
@@ -50,6 +50,24 @@ float *random_vector(int size, int dimensions, float low_bound, float high_bound
 }
                     '''
             )
+
+    def pthreads_vec_random_vector(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si *random_vector(int size, float low_bound, float high_bound){
+   f4si *arr = calloc(size * DIMENSIONS, sizeof(float));
+   int i, j, k;
+   for (i = 0; i < size; i++){
+      for (j = 0; j < NUM_BATCH; j++){
+         for(k = 0; k < BATCH; k++){
+            arr[i*NUM_BATCH+j][k] = get_rand(low_bound, high_bound);
+         }
+      }
+   }
+   return arr;
+}                
+                ''')
 
     def uniform_sample_generator(self):
         with open(self.name.lower() + '.c', 'a') as file:
@@ -113,6 +131,24 @@ int *random_hv(int size){
             '''
             )
 
+    def pthreads_vec_random_hv(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si *random_hv(int size){
+   f4si *arr = calloc(size * DIMENSIONS, sizeof(float));
+   int i, j, k;
+   for (i = 0; i < size; i++){
+      for (j = 0; j < NUM_BATCH; j++){
+         for(k = 0; k < BATCH; k++){
+            arr[i*NUM_BATCH+j][k] = rand() % 100 > P ? 1 : -1;
+         }
+      }
+   }
+   return arr;
+}
+                ''')
+
     def level_hv(self):
         """Creates level hypervector"""
         with open(self.name.lower() + '.c', 'a') as file:
@@ -142,6 +178,33 @@ int *level_hv(int levels){
 }
                 '''
             )
+
+    def pthreads_vec_level_hv(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si *level_hv(int levels){
+    int levels_per_span = levels-1;
+    int span = 1;
+    f4si *span_hv = random_hv(span+1);
+    f4si *threshold_hv = random_vector(span,0,1);
+    f4si *hv = calloc(levels * DIMENSIONS, sizeof(float));
+    int i, j, k;
+    for(i = 0; i < levels; i++){
+        float t = 1 - ((float)i / levels_per_span);
+        for(j = 0; j < NUM_BATCH; j++){
+            for(k = 0; k < BATCH; k++){
+                if((t > threshold_hv[j][k] || i == 0) && i != levels-1){
+                    hv[i*NUM_BATCH+j][k] = span_hv[0*NUM_BATCH+j][k];
+                } else {
+                    hv[i*NUM_BATCH+j][k] = span_hv[1*NUM_BATCH+j][k];
+                }
+             }
+        }
+    }
+    return hv;
+}                
+                ''')
 
     def bind(self):
         """Binds a set of hypervectors together"""
@@ -246,7 +309,7 @@ int* forward(int* weights, float* indices, int size){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-void hard_quantize(int *arr, int size){
+void hard_quantize(float *arr, int size){
    int i, j;
    for (i = 0; i < size; i++){
       for (j = 0; j < DIMENSIONS; j++){
@@ -262,6 +325,54 @@ void hard_quantize(int *arr, int size){
                 '''
             )
 
+
+    def generate_encode_function_pthread(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '\n' +
+                self.encoding_fun + '''
+f4si *encode_function(float* indices){
+    SPLIT_SIZE = ceil(INPUT_DIM/NUM_THREADS);
+    SIZE = SPLIT_SIZE*NUM_THREADS;
+    pthread_t th[NUM_THREADS];
+    int i;
+    for (i = 0; i < NUM_THREADS; i++) {
+        struct arg_struct *args = (struct arg_struct *)calloc(1, sizeof(struct arg_struct));
+        args -> split_start = i*SPLIT_SIZE;
+        args -> indices = indices;
+        if (pthread_create(&th[i], NULL, &encode_fun, args) != 0) {
+            perror("Failed to create thread");
+        }
+    }
+    int j;
+    f4si *res = calloc(DIMENSIONS,sizeof(int));
+    for (i = 0; i < NUM_THREADS; i++) {
+        f4si* r;
+        if (pthread_join(th[i], (void**) &r) != 0) {
+            perror("Failed to join thread");
+        }
+        for(j = 0; j < NUM_BATCH; j++){
+            res[j] += r[j];
+        }
+        free(r);
+    }
+    return res;
+}            
+            ''')
+
+    def generate_encoding_pthread(self):
+        """Generates the encoding"""
+        # TODO: generalize method, think how to set the dimensions depending of bind, bundle, and forward
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write('''
+float* encoding(float* x){
+    float* enc = (float*)encode_function(x);
+    hard_quantize(enc,1);
+    return enc;
+}
+                    '''
+            )
+
     def generate_encoding(self):
         """Generates the encoding"""
         # TODO: generalize method, think how to set the dimensions depending of bind, bundle, and forward
@@ -270,7 +381,7 @@ void hard_quantize(int *arr, int size){
 '\n' +
 self.encoding_fun + '''
 int* encoding(float* x){
-    ''' + self.encoding_fun_call + '''
+    encode_function(x);
     hard_quantize(enc,1);
     return enc;
 }
@@ -351,7 +462,7 @@ float* weights(){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-void update_weight(float* weights, int* encoding, int feature){
+void update_weight(float* weights, float* encoding, int feature){
     int i;
     for(i = 0; i < DIMENSIONS; i++){
         *(weights + feature*DIMENSIONS + i) += (float)*(encoding + i);
@@ -365,9 +476,8 @@ void update_weight(float* weights, int* encoding, int feature){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-float* linear(int* m1, float* m2){
+float* linear(float* m1, float* m2){
     int j, k;
-
     float *arr = (float *)calloc(CLASSES, sizeof(float));
     for (j = 0; j < DIMENSIONS; ++j) {
       for (k = 0; k < CLASSES; ++k) {
@@ -402,7 +512,7 @@ float norm2(float* weight,int feature){
                 '''
 void normalize(float* weight){
    float eps = 1e-12;
-   int i,j;
+   int i, j;
    for (i = 0; i < CLASSES; i++){
       float norm = norm2(weight,i);
       for (j = 0; j < DIMENSIONS; j++){
@@ -420,7 +530,7 @@ void normalize(float* weight){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-void train_loop(float* train[], int* label[], float* classify, int size){
+void train_loop(float* train[], float* label[], float* classify, int size){
     float *res[TRAIN];
     for (int i = 0; i < TRAIN; i++){
         res[i] = (float *)malloc(INPUT_DIM * sizeof(float));
@@ -428,7 +538,7 @@ void train_loop(float* train[], int* label[], float* classify, int size){
     map_range_clamp(train,TRAIN,INPUT_DIM,0,1,0,''' + self.weight_var+'_DIM' + '''-1,res);
     int i;
     for(i = 0; i < size; i++){
-        int* enc = encoding(res[i]);
+        float* enc = encoding(res[i]);
         update_weight(classify,enc,*(label[i]));
         free(res[i]);
         free(enc);
@@ -443,22 +553,24 @@ void train_loop(float* train[], int* label[], float* classify, int size){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-float test_loop(float* test[], int* label[], float* classify, int size){
+float test_loop(float* test[], float* label[], float* classify, int size){
     float *res[TEST];
     for (int i = 0; i < TEST; i++){
-        res[i] = (float *)malloc(INPUT_DIM * sizeof(float));
+        res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
     }
     map_range_clamp(test,TEST,INPUT_DIM,0,1,0,''' + self.weight_var+'_DIM' + '''-1,res);
     int i;
     int correct_pred = 0;
     for(i = 0; i < size; i++){
-        int* enc = encoding(res[i]);
+        float* enc = encoding(res[i]);
         float *l = linear(enc,classify);
         int index = argmax(l);
         if((int)index == (int)*(label[i])){
             correct_pred += 1;
         }
         free(l);
+        free(res[i]);
+        free(enc);
     }
     return correct_pred/(float)TEST;
 }                
@@ -705,7 +817,7 @@ void load_data(float* data[], char* path){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-void load_label(int* data[], char* path){
+void load_label(float* data[], char* path){
     FILE * fp;
     char * line = NULL;
     size_t len = 0;
@@ -786,6 +898,53 @@ void load_dataset(float** trainx, int** trainy, float** testx, int** testy){
             file.write('#define min(a,b) (((a) < (b)) ? (a) : (b))\n')
             file.write('#endif\n')
 
+    def define_headers_pthreads(self):
+        with open(self.name.lower() + '.c', 'w') as file:
+            file.write('/*********** ' + self.name + ' ***********/\n')
+            file.write('#include <stdio.h>\n')
+            file.write('#include <stdlib.h>\n')
+            file.write('#include <stdint.h>\n')
+            file.write('#include <string.h>\n')
+            file.write('#include <math.h>\n')
+            file.write('#include <pthread.h>\n')
+            if self.debug:
+                file.write('#include <time.h>\n')
+            file.write('#ifndef max\n')
+            file.write('#define max(a,b) (((a) > (b)) ? (a) : (b))\n')
+            file.write('#endif\n')
+            file.write('#ifndef min\n')
+            file.write('#define min(a,b) (((a) < (b)) ? (a) : (b))\n')
+            file.write('#endif\n')
+
+    def define_constants_pthreads(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write('/*********** CONSTANTS ***********/\n')
+            file.write('int TRAIN;\n')
+            file.write('int TEST;\n')
+            file.write('int SIZE = ' + str(1) + ';\n')
+            file.write('int P = ' + str(50) + ';\n')
+            file.write('int DIMENSIONS = ' + str(self.dimensions) + ';\n')
+            file.write('int CLASSES = ' + str(self.classes) + ';\n')
+            file.write('int S = 256;\n')
+            file.write('typedef float f4si __attribute__ ((vector_size (256)));\n')
+            file.write('int BATCH;\n')
+            file.write('int NUM_BATCH;\n')
+            file.write('int NUM_THREADS = 4;\n')
+            file.write('int SPLIT_SIZE;\n')
+            file.write('int SIZE;\n')
+            for i in self.embeddings:
+                file.write('f4si* ' + str(i[1]) + ';\n')
+                if i[1] != self.weight_var:
+                    file.write('int INPUT_DIM = ' + str(i[2]) + ';\n')
+                else:
+                    file.write('int ' + str(i[1]) + '_DIM = ' + str(i[2]) + ';\n')
+            file.write('\n')
+            file.write('struct arg_struct {\n')
+            file.write('    int split_start;\n')
+            file.write('    float* indices;\n')
+            file.write('};\n')
+
+
     def define_constants(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write('/*********** CONSTANTS ***********/\n')
@@ -811,11 +970,42 @@ void load_dataset(float** trainx, int** trainy, float** testx, int** testy){
 
     def load_auxiliary(self):
         self.random_number()
-        self.random_vector()
+        self.pthreads_vec_random_vector()
         #self.uniform_sample_generator()
         #self.uniform_generator()
 
     def run(self):
+        self.makefile()
+        self.define_headers_pthreads()
+        self.define_constants_pthreads()
+        self.load_auxiliary()
+
+        self.load_data()
+        self.load_labels()
+
+        self.pthreads_vec_random_hv()
+        self.pthreads_vec_level_hv()
+
+        self.create_weights()
+        self.update_weights()
+        self.linear()
+        self.norm2()
+        self.normalize()
+        self.argmax()
+        self.map_range_clamp()
+        self.hard_quantize()
+        self.generate_encode_function_pthread()
+        self.generate_encoding_pthread()
+
+        self.train()
+        self.test()
+
+        if self.debug:
+            self.general_main_debug_pthread()
+        else:
+            self.general_main_pthread()
+
+    def run1(self):
         self.makefile()
         self.define_headers()
         self.define_globals()
@@ -931,6 +1121,110 @@ int main() {
     printf("acc %f ", acc);
 
 }                
+                '''
+            )
+
+    def general_main_pthread(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+int main(int argc, char **argv) {
+    BATCH = (int) S/sizeof(float);
+    NUM_BATCH = (int) ceil(DIMENSIONS/BATCH);
+
+    TRAIN = atoi(argv[1]);
+    TEST = atoi(argv[2]);
+    float *WEIGHT = weights();
+    '''
+                +
+                str(self.define_embeddings())
+                +
+                '''
+    float *train_data[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        train_data[i] = (float *)calloc(INPUT_DIM, sizeof(float));
+    }
+
+    float *train_labels[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        train_labels[i] = (float *)calloc(1, sizeof(int));
+    }
+
+    float *test_data[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        test_data[i] = (float *)calloc(INPUT_DIM, sizeof(float));
+    }
+
+    float *test_labels[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        test_labels[i] = (float *)calloc(1, sizeof(int));
+    }
+
+    load_data(train_data, argv[3]);
+    load_data(test_data, argv[5]);
+    load_label(train_labels, argv[4]);
+    load_label(test_labels, argv[6]);
+
+    train_loop(train_data, train_labels, WEIGHT,TRAIN);
+    float acc = test_loop(test_data,test_labels,WEIGHT,TEST);
+    printf("Accuracy: %f ", acc);  
+}              
+                '''
+            )
+
+    def general_main_debug_pthread(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+int main(int argc, char **argv) {
+    BATCH = (int) S/sizeof(float);
+    NUM_BATCH = (int) ceil(DIMENSIONS/BATCH);
+
+    TRAIN = atoi(argv[1]);
+    TEST = atoi(argv[2]);
+    float *WEIGHT = weights();
+    '''
+                +
+                str(self.define_embeddings())
+                +
+                '''
+    float *train_data[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        train_data[i] = (float *)calloc(INPUT_DIM, sizeof(float));
+    }
+
+    float *train_labels[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        train_labels[i] = (float *)calloc(1, sizeof(int));
+    }
+
+    float *test_data[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        test_data[i] = (float *)calloc(INPUT_DIM, sizeof(float));
+    }
+
+    float *test_labels[TRAIN];
+    for (int i = 0; i < TRAIN; i++){
+        test_labels[i] = (float *)calloc(1, sizeof(int));
+    }
+
+    load_data(train_data, argv[3]);
+    load_data(test_data, argv[5]);
+    load_label(train_labels, argv[4]);
+    load_label(test_labels, argv[6]);
+
+    struct timespec begin, end;
+    double elapsed;
+    clock_gettime(CLOCK_MONOTONIC, &begin);
+    printf("Start\\n");
+    train_loop(train_data, train_labels, WEIGHT,TRAIN);
+    float acc = test_loop(test_data,test_labels,WEIGHT,TEST);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = end.tv_sec - begin.tv_sec;
+    elapsed += (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
+    printf("Time: %f\\n",elapsed);
+    printf("Accuracy: %f \\n", acc); 
+}              
                 '''
             )
 
