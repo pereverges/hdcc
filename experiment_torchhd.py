@@ -11,6 +11,6 @@ for file in files:
         output.write('\n' + file + '\n')
     for i in range(repetitions):
         for dim in dimensions:
-            with open("output.txt", "a") as output:
+            with open("output_torchhd.txt", "a") as output:
                 res = subprocess.check_output(['python3', file + '.py', str(dim)]).decode(sys.stdout.encoding)
                 output.writelines(res)
