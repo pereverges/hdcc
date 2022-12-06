@@ -68,4 +68,4 @@ with torch.no_grad():
 
 #print('Time', time.time()-t)
 #print('Accuracy', (correct_pred/len(labels)/10000))
-print(DIMENSIONS, time.time()-t, (correct_pred/len(labels)/10000))
+print(DIMENSIONS, time.time()-t, (correct_pred/len(labels)/1000))
