@@ -24,15 +24,16 @@ int S = 128;
 typedef float f4si __attribute__ ((vector_size (128)));
 int BATCH;
 int NUM_BATCH;
-int NUM_THREADS = 8;
+int NUM_THREADS = 4;
 int SPLIT_SIZE;
 int SIZE;
 f4si* VALUE;
 int VALUE_DIM = 100;
 f4si* ID;
 int INPUT_DIM = 617;
+uint64_t size = 4;
 
-#define THREAD_NUM 8
+#define THREAD_NUM 4
 
 typedef struct ThreadList {
 	pthread_t thread; // The thread object
@@ -574,19 +575,7 @@ f4si *encode_function(float* indices, ThreadPool* pool){
         args -> pool = pool;
         mt_add_job(pool, &encode_fun, args);
     }
-    mt_join(pool);
-    /*
-    for (i = 0; i < NUM_THREADS; i++) {
-        f4si* r;
-        if (pthread_join(th[i], (void**) &r) != 0) {
-            perror("Failed to join thread");
-        }
-        for(j = 0; j < NUM_BATCH; j++){
-            res[j] += r[j];
-        }
-        free(r);
-    }
-    */
+    //mt_join(pool);
     return res;
 }
 
@@ -596,22 +585,37 @@ float* encoding(float* x, ThreadPool* pool){
     return enc;
 }
 
-
+float* encodings(float* x, ThreadPool* pool){
+    float* enc = (float*)encode_function(x, pool);
+    hard_quantize(enc,1);
+    return enc;
+}
 
 void train_loop(float* train[], float* label[], float* classify, int size, ThreadPool* pool){
     float *res[TRAIN];
     for (int i = 0; i < TRAIN; i++){
-        res[i] = (float *)malloc(INPUT_DIM * sizeof(float));
+        res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
+    }
+    float *enc[size];
+    for (int i = 0; i < size; i++){
+        enc[i] = (float *)calloc(DIMENSIONS, sizeof(float));
     }
     map_range_clamp(train,TRAIN,INPUT_DIM,0,1,0,VALUE_DIM-1,res);
     int i;
     for(i = 0; i < size; i++){
-        float* enc = encoding(res[i], pool);
-        update_weight(classify,enc,*(label[i]));
-        free(res[i]);
-        free(enc);
+        enc[i] = encodings(res[i], pool);
     }
+    mt_join(pool);
+
+    for(i = 0; i < size; i++){
+        //encoding(res[i], pool);
+        update_weight(classify,enc[i],*(label[i]));
+        //free(res[i]);
+        free(enc[i]);
+    }
+
     normalize(classify);
+
 }
 
 float test_loop(float* test[], float* label[], float* classify, int size, ThreadPool* pool){
@@ -619,25 +623,37 @@ float test_loop(float* test[], float* label[], float* classify, int size, Thread
     for (int i = 0; i < TEST; i++){
         res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
     }
+
+    float *enc[size];
+    for (int i = 0; i < size; i++){
+        enc[i] = (float *)calloc(DIMENSIONS, sizeof(float));
+    }
+
     map_range_clamp(test,TEST,INPUT_DIM,0,1,0,VALUE_DIM-1,res);
     int i;
     int correct_pred = 0;
+
     for(i = 0; i < size; i++){
-        float* enc = encoding(res[i], pool);
-        float *l = linear(enc,classify);
+        enc[i] = encodings(res[i], pool);
+    }
+    mt_join(pool);
+
+    for(i = 0; i < size; i++){
+        float *l = linear(enc[i],classify);
         int index = argmax(l);
         if((int)index == (int)*(label[i])){
             correct_pred += 1;
         }
+
         free(l);
         free(res[i]);
-        free(enc);
+        free(enc[i]);
+
     }
     return correct_pred/(float)TEST;
 }
 
 int main(int argc, char **argv) {
-    uint64_t size = 8;
 	ThreadPool *pool = mt_create_pool(size);
 
     BATCH = (int) S/sizeof(float);
