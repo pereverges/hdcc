@@ -53,12 +53,51 @@ class hdccAST:
         else:
             self.declared_vars.add(params[1][2])
 
+    def enc_pthreads(self):
+        var = ''
+        fun_head = '''
+void* encode_fun(void* arg){'''
+        if self.multiset and self.multibind:
+            self.encoding_fun = fun_head + '''
+            int index = ((struct arg_struct*)arg) -> split_start;
+            float* indices = ((struct arg_struct*)arg) -> indices;
+            int i, j;
+            f4si *arr = calloc(DIMENSIONS, sizeof(int));
+            for(i = index; i < SPLIT_SIZE+index; ++i){
+                if (index < INPUT_DIM){
+                    for(j = 0; j < NUM_BATCH; j++){
+                        ''' + var + '''
+                    }
+                }
+            }
+            return arr;
+        }
+                                    '''
+
+        else:
+            self.encoding_fun = fun_head + '''
+            int index = ((struct arg_struct*)arg) -> split_start;
+            float* indices = ((struct arg_struct*)arg) -> indices;
+            int i, j;
+            f4si *arr = calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
+            for(i = index; i < SPLIT_SIZE+index; ++i){
+                if (index < INPUT_DIM){
+                    for(j = 0; j < NUM_BATCH; j++){
+                        ''' + var + '''
+                    }
+                }
+            }
+            return arr;
+        }
+                        '''
+        self.encoding_fun_call = 'int* enc = encode_thread_creation(x);'
+
     def encoding_build(self, var, t):
         # var = '*(' + var + ')'
         if t == 'multiset':
-            var = 'arr[j] += ' + var + ';'
+            var = 'aux[j] += ' + var + ';'
         else:
-            var = ' arr[(DIMENSIONS*i) + j] = ' + var + ';'
+            var = ' res[(DIMENSIONS*i) + j] = ' + var + ';'
 
         fun_vars = ''
         fun_call_vars = ''
@@ -67,13 +106,16 @@ class hdccAST:
             fun_call_vars += i + ', '
 
         # fun_head = 'int *encode_fun(' + fun_vars + 'float* indices, int size){'
-        fun_head = 'void* encode_fun(void* arg){'
+
+        fun_head = '''
+void encode_fun(void* task){'''
         if self.multiset and self.multibind:
             self.encoding_fun = fun_head + '''
-    int index = ((struct arg_struct*)arg) -> split_start;
-    float* indices = ((struct arg_struct*)arg) -> indices;
+    int index = ((struct EncodeTask*)task) -> split_start;
+    float* indices = ((struct EncodeTask*)task) -> indices;
+    f4si* res = ((struct EncodeTask*)task) -> res;
     int i, j;
-    f4si *arr = calloc(DIMENSIONS, sizeof(int));
+    f4si *aux = calloc(DIMENSIONS,sizeof(int));
     for(i = index; i < SPLIT_SIZE+index; ++i){
         if (index < INPUT_DIM){
             for(j = 0; j < NUM_BATCH; j++){
@@ -81,16 +123,21 @@ class hdccAST:
             }
         }
     }
-    return arr;
+    for(j = 0; j < NUM_BATCH; j++){
+        lock_condition(pool);
+        res[j] += aux[j];
+        unlock_condition(pool);
+    }
 }
                             '''
 
         else:
             self.encoding_fun = fun_head + '''
-    int index = ((struct arg_struct*)arg) -> split_start;
-    float* indices = ((struct arg_struct*)arg) -> indices;
+    int index = ((struct EncodeTask*)task) -> split_start;
+    float* indices = ((struct EncodeTask*)task) -> indices;
+    f4si* res = ((struct EncodeTask*)task) -> res;
     int i, j;
-    f4si *arr = calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
+    f4si *aux = calloc(DIMENSIONS * INPUT_DIM,sizeof(int));
     for(i = index; i < SPLIT_SIZE+index; ++i){
         if (index < INPUT_DIM){
             for(j = 0; j < NUM_BATCH; j++){
@@ -98,7 +145,6 @@ class hdccAST:
             }
         }
     }
-    return arr;
 }
                 '''
         self.encoding_fun_call = 'int* enc = encode_thread_creation(x);'

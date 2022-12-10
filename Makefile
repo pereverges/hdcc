@@ -1,4 +1,3 @@
 CC=gcc
-CFLAGS=-I.
-mnist64: mnist64.o
-	$(CC) -o mnist64 mnist64.o -lm -O3
+all: thread_pool.c thread_pool.h mnist.c
+	$(CC) thread_pool.c mnist.c -lpthread -lm -O3 -o mnist
