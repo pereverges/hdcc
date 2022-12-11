@@ -5,6 +5,7 @@ class IntermediateRepresentation:
     def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun,
                  train_size, test_size, num_threads, vector_size, type):
         self.name = name
+        self.basic_name = self.get_basic_name(name)
         self.classes = classes
         self.dimensions = dimensions
         self.vars = vars
@@ -18,6 +19,14 @@ class IntermediateRepresentation:
         self.test_size = test_size
         self.vector_size = vector_size
         self.num_threads = num_threads
+
+    def get_basic_name(self, name):
+        temp = len(name)
+        for c in name:
+            if c.isdigit():
+                temp = name.index(c)
+                break
+        return name[0:temp]
 
     def define_embeddings(self):
         embedding = ''
@@ -761,13 +770,13 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = end.tv_sec - begin.tv_sec;
     elapsed += (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
-    printf("%d, %f, %f \\n", DIMENSIONS,elapsed, acc);
+    printf("''' + self.basic_name + ''',%d,%f,%f \\n", DIMENSIONS,elapsed, acc);
                     '''
                 )
             else:
                 file.write(
                     '''
-        printf("%d, %f \\n", DIMENSIONS, acc);
+        printf("''' + self.basic_name + ''',%d,%f \\n", DIMENSIONS, acc);
                     '''
                 )
 
@@ -812,13 +821,13 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = end.tv_sec - begin.tv_sec;
     elapsed += (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
-    printf("%d, %f, %f \\n", DIMENSIONS,elapsed, acc);
+    printf("''' + self.basic_name + ''',%d,%f,%f\\n", DIMENSIONS,elapsed, acc);
                     '''
                 )
             else:
                 file.write(
                     '''
-        printf("%d, %f \\n", DIMENSIONS, acc);
+        printf("''' + self.basic_name + ''',%d,%f\\n", DIMENSIONS, acc);
                     '''
                 )
 

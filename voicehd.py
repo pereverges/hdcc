@@ -4,13 +4,10 @@ import torch.nn.functional as F
 
 # Note: this example requires the torchmetrics library: https://torchmetrics.readthedocs.io
 import torchmetrics
-from tqdm import tqdm
 import time
 from torchhd import functional
 from torchhd import embeddings
 from torchhd.datasets.isolet import ISOLET
-import sys
-from memory_profiler import profile
 import sys
 
 BATCH_SIZE = 1
@@ -67,4 +64,4 @@ with torch.no_grad():
         predictions = torch.argmax(outputs, dim=-1)
         accuracy.update(predictions.cpu(), labels)
 
-print(DIMENSIONS, time.time()-t, (accuracy.compute().item()))
+print('voicehd,'+str(DIMENSIONS) +',' + str(time.time()-t)+','+str((accuracy.compute().item())))
