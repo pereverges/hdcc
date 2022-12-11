@@ -6,7 +6,7 @@ from ir import IntermediateRepresentation
 from validate import hdccAST
 import sys
 
-print(sys.argv[1])
+debug = True
 astDirective = hdccAST.astDirective
 
 # Build the lexer
@@ -21,13 +21,17 @@ f.close()
 ast = hdccAST()
 
 for x in parser.parse(data):
+    if debug:
+        print(x)
     ast.validateDirective(x)
 ast.validateRequiredArgs()
 ast.validateVarsDeclaration()
 ast.validateVarsUsage()
-ast.print_parsed_and_validated_input()
+if debug:
+    print()
+    ast.print_parsed_and_validated_input()
 
-name, classes, dimensions, used_vars, input, encoding, embeddings, debug, encoding_fun, encoding_fun_call = ast.get_ast_obj()
+name, classes, dimensions, used_vars, input, encoding, embeddings, debug, encoding_fun, train_size, test_size, num_threads, vector_size, type = ast.get_ast_obj()
 
-ir = IntermediateRepresentation(name, classes, dimensions, used_vars, input, encoding, embeddings, debug, encoding_fun, encoding_fun_call)
+ir = IntermediateRepresentation(name, classes, dimensions, used_vars, input, encoding, embeddings, debug, encoding_fun, train_size, test_size, num_threads, vector_size, type)
 ir.run()

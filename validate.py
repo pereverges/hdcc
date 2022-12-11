@@ -1,3 +1,5 @@
+from execution_type import Types
+
 class hdccAST:
     def __init__(self):
         self.set_arguments = set()
@@ -6,7 +8,6 @@ class hdccAST:
         self.weight = None
         self.encoding = None
         self.encoding_fun = None
-        self.encoding_fun_call = None
         self.embeddings = []
         self.name = None
         self.classes = None
@@ -15,10 +16,63 @@ class hdccAST:
         self.debug = False
         self.multiset = False
         self.multibind = False
-        self.required_arguments = {'NAME', 'EMBEDDING', 'ENCODING', 'CLASSES', 'DIMENSIONS'}
+        self.train_size = None
+        self.test_size = None
+        self.num_threads = None
+        self.type = None
+        self.vector_size = 128
+        self.required_arguments = {'NAME', 'EMBEDDING', 'ENCODING', 'CLASSES', 'DIMENSIONS', 'TEST_SIZE', 'TRAIN_SIZE', 'TYPE'}
 
     def get_ast_obj(self):
-        return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, self.encoding_fun, self.encoding_fun_call
+        return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, self.encoding_fun, self.train_size, self.test_size, self.num_threads, self.vector_size, self.type
+
+    def validateDirective(self, x):
+        action, params = self.astDirective.resolve(x)
+
+        if action not in self.set_arguments:
+            self.set_arguments.add(action)
+        else:
+            self.error_repeated_directive(action, params[0])
+        if action == 'ENCODING':
+            if self.dimensions is not None and self.type is not None:
+                self.wait = False
+                self.encoding, var, t = self.unpack_encoding(params[1])
+                self.encoding_build(var, t)
+            else:
+                self.wait = params[1]
+            # print('Resulting encoding', encoding)
+        if action == 'EMBEDDING':
+            self.set_declared_vars(params)
+            # print(self.declared_vars)
+        if action == 'NAME':
+            self.name = params[1].lower()
+        if action == 'CLASSES':
+            self.classes = params[1]
+        if action == 'DEBUG':
+            self.debug = True
+        if action == 'DIMENSIONS':
+            self.dimensions = params[1]
+            if self.wait is not None and self.type is not None:
+                self.encoding, var, t = self.unpack_encoding(self.wait)
+                self.encoding_build(var, t)
+                self.wait = None
+        if action == 'TRAIN_SIZE':
+            self.train_size = params[1]
+        if action == 'TEST_SIZE':
+            self.test_size = params[1]
+        if action == 'NUM_THREADS':
+            self.num_threads = params[1]
+            if self.wait is not None:
+                self.encoding, var, t = self.unpack_encoding(self.wait)
+                self.encoding_build(var, t)
+                self.wait = None
+        if action == 'VECTOR_SIZE':
+            self.vector_size = params[1]
+        if action == 'TYPE':
+            if params[1] == 'SEQUENTIAL':
+                self.type = Types.SEQUENTIAL
+            elif params[1] == 'PARALLEL':
+                self.type = Types.PARALLEL
 
     def unpack_encoding(self, i):
         if i[1] == 'BIND':
@@ -53,59 +107,51 @@ class hdccAST:
         else:
             self.declared_vars.add(params[1][2])
 
-    def enc_pthreads(self):
-        var = ''
+    def encoding_build(self, var, t):
+        if self.type == Types.SEQUENTIAL:
+            self.encoding_build_sequential(var, t)
+        elif self.type == Types.PARALLEL:
+            self.encoding_build_parallel(var, t)
+
+    def encoding_build_sequential(self,var,t):
+        if t == 'multiset':
+            var = 'arr[j] += ' + var + ';'
+        else:
+            var = ' arr[(DIMENSIONS*i) + j] = ' + var + ';'
+
         fun_head = '''
-void* encode_fun(void* arg){'''
+void* encode_function(float* indices){'''
         if self.multiset and self.multibind:
             self.encoding_fun = fun_head + '''
-            int index = ((struct arg_struct*)arg) -> split_start;
-            float* indices = ((struct arg_struct*)arg) -> indices;
-            int i, j;
-            f4si *arr = calloc(DIMENSIONS, sizeof(int));
-            for(i = index; i < SPLIT_SIZE+index; ++i){
-                if (index < INPUT_DIM){
-                    for(j = 0; j < NUM_BATCH; j++){
-                        ''' + var + '''
-                    }
-                }
-            }
-            return arr;
+    int i, j;
+    f4si *arr = calloc(DIMENSIONS, sizeof(int));
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            ''' + var + '''
         }
-                                    '''
+    }
+    return arr;
+}
+                                '''
 
         else:
             self.encoding_fun = fun_head + '''
-            int index = ((struct arg_struct*)arg) -> split_start;
-            float* indices = ((struct arg_struct*)arg) -> indices;
-            int i, j;
-            f4si *arr = calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
-            for(i = index; i < SPLIT_SIZE+index; ++i){
-                if (index < INPUT_DIM){
-                    for(j = 0; j < NUM_BATCH; j++){
-                        ''' + var + '''
-                    }
-                }
-            }
-            return arr;
+    int i, j;
+    f4si *arr = calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
+    for(i = 0; i < NUM_BATCH; ++i){
+        for(j = 0; j < BATCH; j++){
+            ''' + var + '''
         }
+    }
+    return arr;
+}
                         '''
-        self.encoding_fun_call = 'int* enc = encode_thread_creation(x);'
 
-    def encoding_build(self, var, t):
-        # var = '*(' + var + ')'
+    def encoding_build_parallel(self, var, t):
         if t == 'multiset':
             var = 'aux[j] += ' + var + ';'
         else:
             var = ' res[(DIMENSIONS*i) + j] = ' + var + ';'
-
-        fun_vars = ''
-        fun_call_vars = ''
-        for i in self.used_vars:
-            fun_vars += 'int *' + i + ', '
-            fun_call_vars += i + ', '
-
-        # fun_head = 'int *encode_fun(' + fun_vars + 'float* indices, int size){'
 
         fun_head = '''
 void encode_fun(void* task){'''
@@ -147,37 +193,7 @@ void encode_fun(void* task){'''
     }
 }
                 '''
-        self.encoding_fun_call = 'int* enc = encode_thread_creation(x);'
 
-    def validateDirective(self, x):
-        action, params = self.astDirective.resolve(x)
-
-        if action not in self.set_arguments:
-            self.set_arguments.add(action)
-        else:
-            self.error_repeated_directive(action, params[0])
-        if action == 'ENCODING':
-            if self.dimensions is not None:
-                self.wait = False
-                self.encoding, var, t = self.unpack_encoding(params[1])
-                self.encoding_build(var, t)
-            else:
-                self.wait = params[1]
-            # print('Resulting encoding', encoding)
-        if action == 'EMBEDDING':
-            self.set_declared_vars(params)
-            # print(self.declared_vars)
-        if action == 'NAME':
-            self.name = params[1].lower()
-        if action == 'CLASSES':
-            self.classes = params[1]
-        if action == 'DEBUG':
-            self.debug = True
-        if action == 'DIMENSIONS':
-            self.dimensions = params[1]
-            if self.wait is not None:
-                self.encoding, var, t = self.unpack_encoding(self.wait)
-                self.encoding_build(var, t)
 
     def validateRequiredArgs(self):
         for i in self.required_arguments:
@@ -220,15 +236,19 @@ void encode_fun(void* task){'''
             print('[WARN]: ', msg)
 
     def print_parsed_and_validated_input(self):
-        print('Name:', self.name)
-        print('Classes:', self.classes)
-        print('Dimensions:', self.dimensions)
-        print('Embeddings:', self.embeddings)
-        print('Encoding:', self.encoding)
-        print('Weight variable:', self.weight)
-        print('Debug:', self.debug)
-        print('Encoding fun call:', self.encoding_fun_call)
-        print('Encoding fun:', self.encoding_fun)
+        print('NAME:', self.name)
+        print('CLASSES:', self.classes)
+        print('DIMENSIONS:', self.dimensions)
+        print('TRAIN SIZE:', self.train_size)
+        print('TEST SIZE:', self.test_size)
+        print('VECTOR SIZE:', self.vector_size)
+        print('NUM THREADS:', self.num_threads)
+        print('EXEC TYPE:', self.type)
+        print('EMBEDDINGS:', self.embeddings)
+        print('ENCODING:', self.encoding)
+        print('WEIGHT VARIABLE:', self.weight)
+        print('DEBUG:', self.debug)
+        # print('Encoding fun:', self.encoding_fun)
 
     class astDirective:
         action = None

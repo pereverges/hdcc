@@ -10,7 +10,9 @@ reserved = {
     'MULTISET',
     'DEBUG',
     'TRUE',
-    'FALSE'
+    'FALSE',
+    'SEQUENTIAL',
+    'PARALLEL'
 }
 
 
@@ -41,7 +43,17 @@ tokens = (
     'COLON',
 
     'TRUE',
-    'FALSE'
+    'FALSE',
+
+    'TRAIN_SIZE',
+    'TEST_SIZE',
+
+    'VECTOR_SIZE',
+    'NUM_THREADS',
+
+    'TYPE',
+    'SEQUENTIAL',
+    'PARALLEL'
 )
 
 # REGULAR EXPRESSIONS ASSIGNED TO EACH TOKEN
@@ -69,6 +81,12 @@ t_CLASSES = r'.CLASSES'
 t_DEBUG = r'.DEBUG'
 t_TRUE = r'TRUE'
 t_FALSE = r'FALSE'
+t_TRAIN_SIZE = r'.TRAIN_SIZE'
+t_TEST_SIZE = r'.TEST_SIZE'
+t_VECTOR_SIZE = r'.VECTOR_SIZE'
+t_NUM_THREADS = r'.NUM_THREADS'
+t_TYPE = r'.TYPE'
+
 
 def t_COMMENT(t):
     r'\//.*'
