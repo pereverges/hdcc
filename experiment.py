@@ -1,6 +1,9 @@
 import os
 import sys
 import subprocess
+from datetime import datetime
+
+now = '_hdcc_' + datetime.now().strftime("%d_%m_%Y_%H:%M:%S")
 
 out_file = sys.argv[1]
 
@@ -14,7 +17,7 @@ type_exec = 'PARALLEL'
 repetitions = 1
 
 for index, file in enumerate(files):
-    with open(out_file, "a") as output:
+    with open(out_file+now, "w") as output:
         output.write('\n' + file + ': num_threads ' + str(num_threads) + ', vector_size ' + str(vector_size) + '\n')
     for i in range(repetitions):
         for dim in dimensions:
@@ -35,7 +38,7 @@ for index, file in enumerate(files):
                 f.writelines(lines)
 
             os.system('python3 main.py ' + str(file) + str(dim) +'.hdcc')
-            with open(out_file, "a") as output:
+            with open(out_file+now, "a") as output:
                 print(subprocess.check_output('make'))
                 if file == 'mnist':
                     res = subprocess.check_output(["./"+str(file) + str(dim), "data/MNIST/mnist_train_data", "data/MNIST/mnist_train_labels", "data/MNIST/mnist_test_data", "data/MNIST/mnist_test_labels"]).decode(sys.stdout.encoding)
