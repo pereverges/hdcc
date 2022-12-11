@@ -4,12 +4,12 @@ import subprocess
 
 out_file = sys.argv[1]
 
-dimensions = [10240]
+dimensions = [64, 128, 512, 1024, 4096, 10240]
 files = ['mnist', 'voicehd']
 train_size = [60000, 6238]
 test_size = [10000, 1559]
-vector_size = 128
-num_threads = 6
+vector_size = 256
+num_threads = 20
 type_exec = 'PARALLEL'
 repetitions = 1
 
