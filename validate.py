@@ -174,6 +174,7 @@ void encode_fun(void* task){'''
         res[j] += aux[j];
         unlock_condition(pool);
     }
+    free(aux);
 }
                             '''
 
