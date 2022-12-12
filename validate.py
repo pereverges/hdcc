@@ -175,6 +175,7 @@ void encode_fun(void* task){'''
         unlock_condition(pool);
     }
     free(aux);
+    free(task);
 }
                             '''
 
@@ -192,6 +193,7 @@ void encode_fun(void* task){'''
             }
         }
     }
+    free(task);
 }
                 '''
 
