@@ -85,6 +85,14 @@ def p_parallel(p):
     '''type : PARALLEL'''
     p[0] = p[1]
 
+def p_parallel_memory_efficient(p):
+    '''type : PARALLEL_MEMORY_EFFICIENT'''
+    p[0] = p[1]
+
+def p_memory_batch(p):
+    '''directive : MEMORY_BATCH NUMBER'''
+    p[0] = astDirective(action='MEMORY_BATCH', params=[p.lineno(1), p[2]])
+
 def p_embeddings_list(p):
     '''embeddings : value_embedding
                   | value '''

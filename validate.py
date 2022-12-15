@@ -21,10 +21,11 @@ class hdccAST:
         self.num_threads = None
         self.type = None
         self.vector_size = 128
+        self.memory_batch = 200
         self.required_arguments = {'NAME', 'EMBEDDING', 'ENCODING', 'CLASSES', 'DIMENSIONS', 'TEST_SIZE', 'TRAIN_SIZE', 'TYPE'}
 
     def get_ast_obj(self):
-        return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, self.encoding_fun, self.train_size, self.test_size, self.num_threads, self.vector_size, self.type
+        return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, self.encoding_fun, self.train_size, self.test_size, self.num_threads, self.vector_size, self.type, self.memory_batch
 
     def validateDirective(self, x):
         action, params = self.astDirective.resolve(x)
@@ -73,6 +74,10 @@ class hdccAST:
                 self.type = Types.SEQUENTIAL
             elif params[1] == 'PARALLEL':
                 self.type = Types.PARALLEL
+            elif params[1] == 'PARALLEL_MEMORY_EFFICIENT':
+                self.type = Types.PARALLEL_MEMORY_EFFICIENT
+        if action == 'MEMORY_BATCH':
+            self.memory_batch = params[1]
 
     def unpack_encoding(self, i):
         if i[1] == 'BIND':
@@ -112,6 +117,8 @@ class hdccAST:
             self.encoding_build_sequential(var, t)
         elif self.type == Types.PARALLEL:
             self.encoding_build_parallel(var, t)
+        elif self.type == Types.PARALLEL_MEMORY_EFFICIENT:
+            self.encoding_build_parallel_memory_efficient(var, t)
 
     def encoding_build_sequential(self,var,t):
         if t == 'multiset':
@@ -185,7 +192,6 @@ void encode_fun(void* task){'''
     float* indices = ((struct EncodeTask*)task) -> indices;
     f4si* res = ((struct EncodeTask*)task) -> res;
     int i, j;
-    f4si *aux = calloc(DIMENSIONS * INPUT_DIM,sizeof(int));
     for(i = index; i < SPLIT_SIZE+index; ++i){
         if (index < INPUT_DIM){
             for(j = 0; j < NUM_BATCH; j++){
@@ -197,6 +203,98 @@ void encode_fun(void* task){'''
 }
                 '''
 
+    def encoding_build_parallel_memory_efficient(self, var, t):
+        if t == 'multiset':
+            var = 'enc[j] += ' + var + ';'
+        else:
+            var = ' enc[(DIMENSIONS*i) + j] = ' + var + ';'
+
+        fun_head_train = '''
+void encode_train_task(void* task){'''
+
+        fun_head_test = '''
+void encode_test_task(void* task){'''
+        if self.multiset and self.multibind:
+            self.encoding_fun = fun_head_train + '''
+    f4si *enc = calloc(DIMENSIONS,sizeof(int));
+    float* data = ((struct Task*)task) -> data;
+    int label = ((struct Task*)task) -> label;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            ''' + var + '''
+        }
+    }
+    hard_quantize((float*)enc,1);
+    update_weight((float*)enc,label);
+    free(enc);
+}
+
+''' + fun_head_test + '''
+    f4si *enc = calloc(DIMENSIONS,sizeof(int));
+    float* data = ((struct Task*)task) -> data;
+    int label = ((struct Task*)task) -> label;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            ''' + var + '''
+        }
+    }
+    float *l = linear((float*)enc);
+    free(enc);
+    if(argmax(l) == label){
+        free(l);
+        update_correct_predictions();
+    }
+}
+                            '''
+
+        else:
+            self.encoding_fun = fun_head_train + '''
+    int index = ((struct EncodeTaskTrain*)task) -> split_start;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    float* data = ((struct EncodeTaskTrain*)task) -> data;
+    int label = ((struct EncodeTaskTrain*)task) -> label;
+    map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
+    f4si *res = calloc(DIMENSIONS*INPUT_DIM,sizeof(int));
+    int i, j;
+    for(i = index; i < SPLIT_SIZE+index; ++i){
+        if (index < INPUT_DIM){
+            for(j = 0; j < NUM_BATCH; j++){
+                ''' + var + '''
+            }
+        }
+    }
+    hard_quantize((float *)res,1);
+    update_weight((float *)res, label);
+    free(res);
+    free(indices);
+}
+
+''' + fun_head_test + '''
+    int index = ((struct EncodeTaskTrain*)task) -> split_start;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    float* data = ((struct EncodeTaskTrain*)task) -> data;
+    int label = ((struct EncodeTaskTrain*)task) -> label;
+    map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
+    f4si *res = calloc(DIMENSIONS*INPUT_DIM,sizeof(int));
+    int i, j;
+    for(i = index; i < SPLIT_SIZE+index; ++i){
+        if (index < INPUT_DIM){
+            for(j = 0; j < NUM_BATCH; j++){
+                ''' + var + '''
+            }
+        }
+    }
+    hard_quantize((float *)res,1);
+    update_weight((float *)res, label);
+    free(res);
+    free(indices);
+} '''
 
     def validateRequiredArgs(self):
         for i in self.required_arguments:

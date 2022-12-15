@@ -13,8 +13,8 @@ files = ['mnist', 'voicehd']
 train_size = [60000, 6238]
 test_size = [10000, 1559]
 vector_size = 128
-num_threads = 4
-type_exec = 'PARALLEL'
+num_threads = 6
+type_exec = 'PARALLEL_MEMORY_EFFICIENT'
 repetitions = 1
 
 out_file += '_num_threads_' + str(num_threads) + '_vector_size'

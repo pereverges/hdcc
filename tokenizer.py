@@ -12,7 +12,9 @@ reserved = {
     'TRUE',
     'FALSE',
     'SEQUENTIAL',
-    'PARALLEL'
+    'PARALLEL',
+    'PARALLEL_MEMORY_EFFICIENT',
+
 }
 
 
@@ -53,7 +55,10 @@ tokens = (
 
     'TYPE',
     'SEQUENTIAL',
-    'PARALLEL'
+    'PARALLEL',
+    'PARALLEL_MEMORY_EFFICIENT',
+
+    'MEMORY_BATCH'
 )
 
 # REGULAR EXPRESSIONS ASSIGNED TO EACH TOKEN
@@ -86,6 +91,7 @@ t_TEST_SIZE = r'.TEST_SIZE'
 t_VECTOR_SIZE = r'.VECTOR_SIZE'
 t_NUM_THREADS = r'.NUM_THREADS'
 t_TYPE = r'.TYPE'
+t_MEMORY_BATCH = r'.MEMORY_BATCH'
 
 
 def t_COMMENT(t):

@@ -1,9 +1,10 @@
 import math
 from execution_type import Types
 
+
 class IntermediateRepresentation:
     def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun,
-                 train_size, test_size, num_threads, vector_size, type):
+                 train_size, test_size, num_threads, vector_size, type, memory_batch):
         self.name = name
         self.basic_name = self.get_basic_name(name)
         self.classes = classes
@@ -19,6 +20,7 @@ class IntermediateRepresentation:
         self.test_size = test_size
         self.vector_size = vector_size
         self.num_threads = num_threads
+        self.memory_batch = memory_batch
 
     def get_basic_name(self, name):
         temp = len(name)
@@ -61,6 +63,8 @@ class IntermediateRepresentation:
             self.makefile_sequential()
         if self.type == Types.PARALLEL:
             self.makefile_parallel()
+        if self.type == Types.PARALLEL_MEMORY_EFFICIENT:
+            self.makefile_parallel()
 
     def makefile_sequential(self):
         doto = '.o'
@@ -84,6 +88,8 @@ class IntermediateRepresentation:
             self.define_header_sequential()
         if self.type == Types.PARALLEL:
             self.define_header_parallel()
+        if self.type == Types.PARALLEL_MEMORY_EFFICIENT:
+            self.define_header_parallel_memory_efficient()
 
     def define_header_sequential(self):
         self.define_include_sequential()
@@ -92,6 +98,10 @@ class IntermediateRepresentation:
     def define_header_parallel(self):
         self.define_include_parallel()
         self.define_constants_parallel()
+
+    def define_header_parallel_memory_efficient(self):
+        self.define_include_parallel()
+        self.define_constants_parallel_memory_efficient()
 
     def define_include_sequential(self):
         with open(self.name.lower() + '.c', 'w') as file:
@@ -201,6 +211,55 @@ class IntermediateRepresentation:
             file.write('    f4si *res;\n')
             file.write('};\n')
 
+    def define_constants_parallel_memory_efficient(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write('/*********** CONSTANTS ***********/\n')
+            file.write('#define TRAIN ' + str(self.train_size) + '\n')
+            file.write('#define TEST ' + str(self.test_size) + '\n')
+
+            file.write('#define DIMENSIONS ' + str(self.dimensions) + '\n')
+            file.write('#define CLASSES ' + str(self.classes) + '\n')
+            file.write('#define VECTOR_SIZE ' + str(self.vector_size) + '\n')
+            file.write('float *WEIGHT;\n')
+            file.write('typedef float f4si __attribute__ ((vector_size (' + str(self.vector_size) + ')));\n')
+
+            input_dim = 0
+            for i in self.embeddings:
+                file.write('f4si* ' + str(i[1]) + ';\n')
+                if i[1] != self.weight_var:
+                    file.write('#define INPUT_DIM ' + str(i[2]) + '\n')
+                    input_dim = i[2]
+                else:
+                    file.write('#define ' + str(i[1]) + '_DIM ' + str(i[2]) + '\n')
+
+            file.write('#define BATCH ' + str(int(self.vector_size / 4)) + '\n')
+            file.write('#define NUM_BATCH ' + str(int(self.dimensions / (self.vector_size / 4))) + '\n')
+            file.write('#define NUM_THREADS ' + str(self.num_threads) + '\n')
+            file.write('#define SPLIT_SIZE ' + str(math.floor(input_dim / self.num_threads)) + '\n')
+            file.write('#define SIZE ' + str(math.floor(input_dim / self.num_threads) * self.num_threads) + '\n')
+            file.write('int CORRECT_PREDICTIONS;\n')
+
+            file.write('#define MEMORY_BATCH ' + str(self.memory_batch) + '\n')
+            file.write('ThreadPool *pool;\n')
+
+            file.write('struct DataReader {\n')
+            file.write('    char *path;\n')
+            file.write('    FILE *fp;\n')
+            file.write('    char * line;\n')
+            file.write('    size_t len;\n')
+            file.write('    ssize_t read;\n')
+            file.write('};\n')
+
+            file.write('struct DataReader* train_data;\n')
+            file.write('struct DataReader* train_labels;\n')
+            file.write('struct DataReader* test_data;\n')
+            file.write('struct DataReader* test_labels;\n')
+
+            file.write('struct Task {\n')
+            file.write('    float* data;\n')
+            file.write('    int label;\n')
+            file.write('};\n')
+
     # ------------------- DEFINE DATA LOADERS ------------------- #
 
     def define_dataset_loaders(self):
@@ -208,6 +267,8 @@ class IntermediateRepresentation:
             self.define_dataset_loader_sequential()
         if self.type == Types.PARALLEL:
             self.define_dataset_loader_parallel()
+        if self.type == Types.PARALLEL_MEMORY_EFFICIENT:
+            self.define_dataset_loader_parallel_memory_efficient()
 
     def define_dataset_loader_sequential(self):
         self.load_data()
@@ -218,6 +279,32 @@ class IntermediateRepresentation:
         self.load_data()
         self.load_labels()
         self.load_dataset()
+
+    def define_dataset_loader_parallel_memory_efficient(self):
+        self.set_data_loaders()
+        self.load_data_memory_efficient()
+        self.load_labels_memory_efficient()
+        self.load_dataset_memory_efficient()
+        self.close_files_memory_efficient()
+
+    def set_data_loaders(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+struct DataReader* set_load_data(char* path, struct DataReader* data_reader){
+    data_reader = (struct DataReader *)calloc(1, sizeof(struct DataReader));
+    data_reader -> path = path;
+    data_reader -> fp = fopen(path, "r");
+    data_reader -> line = NULL;
+    data_reader -> len = 0;
+    
+    if (data_reader -> fp == NULL)
+        exit(EXIT_FAILURE);
+    
+    return data_reader;
+}
+            '''
+            )
 
     def load_data(self):
         with open(self.name.lower() + '.c', 'a') as file:
@@ -248,6 +335,25 @@ void load_data(float* data[], char* path){
             '''
             )
 
+    def load_data_memory_efficient(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                    '''
+float* load_data_next_line(struct DataReader* data_reader){
+    float* data = (float *) calloc(INPUT_DIM, sizeof(float));
+    char* token;
+    if ((data_reader -> read = getline(&data_reader -> line, &data_reader -> len, data_reader -> fp)) != -1) {
+        token = strtok(data_reader -> line, ",");
+        for (int i = 0; i < INPUT_DIM; i++){
+          *(data + i) = (float) atof(token);
+          token = strtok(NULL, ",");
+        }
+    }
+    return data;
+}
+                '''
+                )
+
     def load_labels(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
@@ -270,6 +376,21 @@ void load_label(float* data[], char* path){
     if (line)
         free(line);
 }       
+                '''
+            )
+
+    def load_labels_memory_efficient(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+int load_labels_next_line(struct DataReader* data_reader){
+    int label;
+    char* token;
+    if ((data_reader -> read = getline(&data_reader -> line, &data_reader -> len, data_reader -> fp)) != -1) {
+         label = atoi(data_reader -> line);
+    }
+    return label;
+}
                 '''
             )
 
@@ -296,6 +417,31 @@ void load_dataset(char **argv){
                 '''
             )
 
+    def load_dataset_memory_efficient(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+void prepare_to_load_data(char **argv){
+    train_data = set_load_data(argv[1], train_data);
+    train_labels = set_load_data(argv[2], train_labels);
+    test_data = set_load_data(argv[3], test_data);
+    test_labels = set_load_data(argv[4], test_labels);
+}
+                '''
+            )
+
+    def close_files_memory_efficient(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+void close_file(struct DataReader* data_reader){
+    fclose(data_reader -> fp );
+    if (data_reader -> line)
+        free(data_reader -> line);
+}
+                '''
+            )
+
     # ------------------- DEFINE MATH FUNCTIONS ------------------- #
 
     def define_math_functions(self):
@@ -303,6 +449,8 @@ void load_dataset(char **argv){
             self.define_math_functions_sequential()
         if self.type == Types.PARALLEL:
             self.define_math_functions_parallel()
+        if self.type == Types.PARALLEL_MEMORY_EFFICIENT:
+            self.define_math_functions_parallel_memory_efficient()
 
     def define_math_functions_sequential(self):
         self.define_random_number()
@@ -326,6 +474,19 @@ void load_dataset(char **argv){
         self.define_normalize()
         self.define_argmax()
         self.define_map_range_clamp()
+        self.define_hard_quantize()
+
+    def define_math_functions_parallel_memory_efficient(self):
+        self.define_random_number()
+        self.define_random_vector()
+        self.define_weights()
+        self.define_update_weights()
+        self.define_update_correct_predictions()
+        self.define_linear()
+        self.define_norm2()
+        self.define_normalize()
+        self.define_argmax()
+        self.define_map_range_clamp_one()
         self.define_hard_quantize()
 
     def define_random_number(self):
@@ -376,6 +537,18 @@ void update_weight(float* encoding, int feature){
     for(i = 0; i < DIMENSIONS; i++){
         *(WEIGHT + feature*DIMENSIONS + i) += (float)*(encoding + i);
     }
+}
+                    '''
+            )
+
+    def define_update_correct_predictions(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+void update_correct_predictions(){
+    lock_condition(pool);
+    CORRECT_PREDICTIONS += 1;
+    unlock_condition(pool);
 }
                     '''
             )
@@ -469,6 +642,23 @@ float** map_range_clamp(float* arr[], int size, float out_max, float* res[]){
                     '''
             )
 
+    def define_map_range_clamp_one(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+void map_range_clamp_one(float* arr, float out_max, float* res){
+    float in_min = 0;
+    float in_max = 1;
+    float out_min = 0;
+    int i, j;
+    for (j = 0; j < INPUT_DIM; j++){
+        float map_range = round(out_min + (out_max - out_min) * (*(arr + j) - in_min) / (in_max - in_min));
+        *(res + j) = min(max(map_range,out_min),out_max);
+    }
+}
+                    '''
+            )
+
     def define_hard_quantize(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
@@ -491,12 +681,13 @@ void hard_quantize(float *arr, int size){
 
     # ------------------- DEFINE HDC FUNCTIONS ------------------- #
 
-
     def define_hdc_functions(self):
         if self.type == Types.SEQUENTIAL:
             self.define_hdc_functions_sequential()
         if self.type == Types.PARALLEL:
             self.define_hdc_functions_parallel()
+        if self.type == Types.PARALLEL_MEMORY_EFFICIENT:
+            self.define_hdc_functions_parallel_memory_efficient()
 
     def define_hdc_functions_sequential(self):
         self.define_random_hv()
@@ -509,6 +700,11 @@ void hard_quantize(float *arr, int size){
         self.define_level_hv()
         self.define_encoding_function_parallel()
         self.define_encoding_parallel()
+
+    def define_hdc_functions_parallel_memory_efficient(self):
+        self.define_random_hv()
+        self.define_level_hv()
+        self.define_encoding_function_parallel_memory_efficient()
 
     def define_random_hv(self):
         with open(self.name.lower() + '.c', 'a') as file:
@@ -583,7 +779,6 @@ float* encodings(float* x){
             file.write(
                 '''
 f4si *encode_function(float* indices){
-    struct EncodeTask *task = (struct EncodeTask *)malloc(sizeof(struct EncodeTask));
     f4si *res = calloc(DIMENSIONS,sizeof(int));
     for (int i = 0; i < NUM_THREADS; i++) {
         struct EncodeTask *task = (struct EncodeTask *)malloc(sizeof(struct EncodeTask));
@@ -602,6 +797,48 @@ float* encodings(float* x){
 }
                 ''')
 
+    def define_encoding_function_parallel_memory_efficient(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(self.encoding_fun)
+
+    def define_encoding_train_parallel_memory_efficient(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+void encode_function_train(float* train_data, int label){
+    for (int i = 0; i < NUM_THREADS; i++) {
+        struct EncodeTaskTrain *task = (struct EncodeTaskTrain *)calloc(1, sizeof(struct EncodeTaskTrain));
+        task -> split_start = i*SPLIT_SIZE;
+        task -> data = train_data;
+        task -> label = label;
+        mt_add_job(pool, &encode_fun_train, task);
+    }
+}
+                ''')
+
+    def define_encoding_test_parallel_memory_efficient(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si *encode_function_test(float* indices){
+    f4si *res = calloc(DIMENSIONS,sizeof(int));
+    for (int i = 0; i < NUM_THREADS; i++) {
+        struct EncodeTaskTest *task = (struct EncodeTaskTest *)malloc(sizeof(struct EncodeTaskTest));
+        task -> split_start = i*SPLIT_SIZE;
+        task -> indices = indices;
+        task -> res = res;
+        mt_add_job(pool, &encode_fun_test, task);
+    }
+    return res;
+}
+
+float* encoding_test(float* x){
+    float* enc = (float*)encode_function_test(x);
+    //hard_quantize(enc,1);
+    return enc;
+}
+                ''')
+
     # ------------------- DEFINE TRAIN AND TEST ------------------- #
 
     def define_train_and_test(self):
@@ -609,6 +846,8 @@ float* encodings(float* x){
             self.define_train_and_test_sequential()
         if self.type == Types.PARALLEL:
             self.define_train_and_test_parallel()
+        if self.type ==  Types.PARALLEL_MEMORY_EFFICIENT:
+            self.define_train_and_test_parallel_memory_efficient()
 
     def define_train_and_test_sequential(self):
         self.define_train_loop_sequential()
@@ -617,6 +856,10 @@ float* encodings(float* x){
     def define_train_and_test_parallel(self):
         self.define_train_loop_parallel()
         self.define_test_loop_parallel()
+
+    def define_train_and_test_parallel_memory_efficient(self):
+        self.define_train_loop_parallel_memory_efficient()
+        self.define_test_loop_parallel_memory_efficient()
 
     def define_train_loop_sequential(self):
         with open(self.name.lower() + '.c', 'a') as file:
@@ -728,6 +971,42 @@ float test_loop(){
                     '''
             )
 
+    def define_train_loop_parallel_memory_efficient(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+void train_loop(){
+    int i;
+    for(i = 0; i < TRAIN; i++){
+        struct Task *task = (struct Task *)malloc(sizeof(struct Task));
+        task -> data = load_data_next_line(train_data);
+        task -> label = load_labels_next_line(train_labels);
+        mt_add_job(pool, &encode_train_task, task);
+    }
+    mt_join(pool);
+    normalize();
+}
+                    '''
+            )
+
+    def define_test_loop_parallel_memory_efficient(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+float test_loop(){
+    int i;
+    for(i = 0; i < TEST; i++){
+        struct Task *task = (struct Task *)malloc(sizeof(struct Task));
+        task -> data = load_data_next_line(test_data);
+        task -> label = load_labels_next_line(test_labels);
+        mt_add_job(pool, &encode_test_task, task);
+    }
+    mt_join(pool);
+    return CORRECT_PREDICTIONS/(float)TEST;
+}
+                    '''
+            )
+
     # ------------------- DEFINE TRAIN AND TEST ------------------- #
 
     def general_main(self):
@@ -735,6 +1014,8 @@ float test_loop(){
             self.general_main_sequential()
         if self.type == Types.PARALLEL:
             self.general_main_parallel()
+        if self.type == Types.PARALLEL_MEMORY_EFFICIENT:
+            self.general_main_parallel_memory_efficient()
 
     def general_main_sequential(self):
         with open(self.name.lower() + '.c', 'a') as file:
@@ -799,6 +1080,57 @@ int main(int argc, char **argv) {
 	pool = mt_create_pool(NUM_THREADS);
     weights();
     load_dataset(argv);
+    '''
+            )
+            if self.debug:
+                file.write(
+                    '''
+    struct timespec begin, end;
+    double elapsed;
+    clock_gettime(CLOCK_MONOTONIC, &begin);
+                    '''
+                )
+
+            file.write(
+                '''
+    train_loop();
+    float acc = test_loop();
+                        ''')
+            if self.debug:
+                file.write(
+                    '''
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = end.tv_sec - begin.tv_sec;
+    elapsed += (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
+    printf("''' + self.basic_name + ''',%d,%f,%f\\n", DIMENSIONS,elapsed, acc);
+                    '''
+                )
+            else:
+                file.write(
+                    '''
+        printf("''' + self.basic_name + ''',%d,%f\\n", DIMENSIONS, acc);
+                    '''
+                )
+
+            file.write(
+                '''
+}              
+                '''
+            )
+
+    def general_main_parallel_memory_efficient(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+int main(int argc, char **argv) {
+    '''
+                +
+                str(self.define_embeddings())
+                +
+                '''
+	pool = mt_create_pool(NUM_THREADS);
+    weights();
+    prepare_to_load_data(argv);
     '''
             )
             if self.debug:

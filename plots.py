@@ -2,8 +2,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 folder = 'experiments/'
-file_hdcc = folder + 'mac_num_threads_4_vector_size_hdcc_11_12_2022_10:28:38'
-file_torchhd = folder + 'mac_torchhd_11_12_2022_12:25:50'
+file_hdcc = folder + 'openlab_num_threads_20_vector_size_hdcc_12_12_2022_09:46:49'
+file_torchhd = folder + 'openlab_torchhd_12_12_2022_09:58:43'
 
 dataset_hdcc = pd.read_csv(file_hdcc)
 dataset_torchhd = pd.read_csv(file_torchhd)
