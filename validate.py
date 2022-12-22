@@ -6,6 +6,7 @@ class hdccAST:
         self.declared_vars = set()
         self.used_vars = set()
         self.weight = None
+        self.input = None
         self.encoding = None
         self.encoding_fun = None
         self.embeddings = []
@@ -25,7 +26,7 @@ class hdccAST:
         self.required_arguments = {'NAME', 'EMBEDDING', 'ENCODING', 'CLASSES', 'DIMENSIONS', 'TEST_SIZE', 'TRAIN_SIZE', 'TYPE'}
 
     def get_ast_obj(self):
-        return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, self.encoding_fun, self.train_size, self.test_size, self.num_threads, self.vector_size, self.type, self.memory_batch
+        return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, self.encoding_fun, self.train_size, self.test_size, self.num_threads, self.vector_size, self.type, self.memory_batch, self.input
 
     def validateDirective(self, x):
         action, params = self.astDirective.resolve(x)
@@ -93,6 +94,7 @@ class hdccAST:
         else:
             self.set_used_var(i)
             if i == self.weight:
+                print("###################### , ",i)
                 return self.weight, ''+self.weight+'[(int)indices[i]', 'var'
             return i.upper(), i.upper()+'[', 'var'
 
@@ -105,6 +107,10 @@ class hdccAST:
                 if i[1] == 'WEIGHT':
                     self.declared_vars.add(i[2])
                     self.weight = i[2]
+                    self.embeddings.append([i[3], i[2], i[4]])
+                elif i[1] == 'INPUT':
+                    self.declared_vars.add(i[2])
+                    self.input = i[2]
                     self.embeddings.append([i[3], i[2], i[4]])
                 else:
                     self.declared_vars.add(i[1])
@@ -220,7 +226,7 @@ void encode_test_task(void* task){'''
     float* data = ((struct Task*)task) -> data;
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
-    map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
+    map_range_clamp_one(data,INPUT_DIM-1, indices);
     int i, j;
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < NUM_BATCH; j++){
@@ -230,6 +236,8 @@ void encode_test_task(void* task){'''
     hard_quantize((float*)enc,1);
     update_weight((float*)enc,label);
     free(enc);
+    free(indices);
+    free(data);
 }
 
 ''' + fun_head_test + '''
@@ -237,7 +245,7 @@ void encode_test_task(void* task){'''
     float* data = ((struct Task*)task) -> data;
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
-    map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
+    map_range_clamp_one(data,INPUT_DIM-1, indices);
     int i, j;
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < NUM_BATCH; j++){
@@ -250,6 +258,8 @@ void encode_test_task(void* task){'''
         free(l);
         update_correct_predictions();
     }
+    free(indices);
+    free(data);
 }
                             '''
 
@@ -259,7 +269,7 @@ void encode_test_task(void* task){'''
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     float* data = ((struct EncodeTaskTrain*)task) -> data;
     int label = ((struct EncodeTaskTrain*)task) -> label;
-    map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
+    map_range_clamp_one(data,INPUT_DIM-1, indices);
     f4si *res = calloc(DIMENSIONS*INPUT_DIM,sizeof(int));
     int i, j;
     for(i = index; i < SPLIT_SIZE+index; ++i){
@@ -280,7 +290,7 @@ void encode_test_task(void* task){'''
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     float* data = ((struct EncodeTaskTrain*)task) -> data;
     int label = ((struct EncodeTaskTrain*)task) -> label;
-    map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
+    map_range_clamp_one(data,INPUT_DIM-1, indices);
     f4si *res = calloc(DIMENSIONS*INPUT_DIM,sizeof(int));
     int i, j;
     for(i = index; i < SPLIT_SIZE+index; ++i){

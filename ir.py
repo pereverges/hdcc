@@ -4,7 +4,7 @@ from execution_type import Types
 
 class IntermediateRepresentation:
     def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun,
-                 train_size, test_size, num_threads, vector_size, type, memory_batch):
+                 train_size, test_size, num_threads, vector_size, type, memory_batch, input):
         self.name = name
         self.basic_name = self.get_basic_name(name)
         self.classes = classes
@@ -21,6 +21,7 @@ class IntermediateRepresentation:
         self.vector_size = vector_size
         self.num_threads = num_threads
         self.memory_batch = memory_batch
+        self.input = input
 
     def get_basic_name(self, name):
         temp = len(name)
@@ -34,12 +35,12 @@ class IntermediateRepresentation:
         embedding = ''
         for i in self.embeddings:
             if i[0] == 'LEVEL':
-                if i[1] != self.weight_var:
+                if i[1] == self.weight_var:
                     embedding += ("\n    " + str(i[1].upper() + " = level_hv(" + 'INPUT_DIM' + ");"))
                 else:
                     embedding += ("\n    " + str(i[1].upper() + " = level_hv(" + str(i[1]) + '_DIM' + ");"))
             if i[0] == 'RANDOM':
-                if i[1] != self.weight_var:
+                if i[1] == self.weight_var:
                     embedding += ("\n    " + str(i[1].upper() + " = random_hv(" + 'INPUT_DIM' + ");"))
                 else:
                     embedding += ("\n    " + str(i[1].upper() + " = random_hv(" + str(i[1]) + '_DIM' + ");"))
@@ -134,7 +135,7 @@ class IntermediateRepresentation:
 
             for i in self.embeddings:
                 file.write('f4si* ' + str(i[1]) + ';\n')
-                if i[1] != self.weight_var:
+                if i[1] == self.input:
                     file.write('#define INPUT_DIM ' + str(i[2]) + '\n')
                 else:
                     file.write('#define ' + str(i[1]) + '_DIM ' + str(i[2]) + '\n')
@@ -187,7 +188,7 @@ class IntermediateRepresentation:
             input_dim = 0
             for i in self.embeddings:
                 file.write('f4si* ' + str(i[1]) + ';\n')
-                if i[1] != self.weight_var:
+                if i[1] == self.input:
                     file.write('#define INPUT_DIM ' + str(i[2]) + '\n')
                     input_dim = i[2]
                 else:
@@ -226,7 +227,7 @@ class IntermediateRepresentation:
             input_dim = 0
             for i in self.embeddings:
                 file.write('f4si* ' + str(i[1]) + ';\n')
-                if i[1] != self.weight_var:
+                if i[1] == self.input:
                     file.write('#define INPUT_DIM ' + str(i[2]) + '\n')
                     input_dim = i[2]
                 else:
@@ -681,6 +682,80 @@ void hard_quantize(float *arr, int size){
 
     # ------------------- DEFINE HDC FUNCTIONS ------------------- #
 
+    def bind(self):
+        """Binds a set of hypervectors together"""
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si *bind(f4si *a, f4si *b){
+    int i, j;
+    f4si *enc = (f4si *)calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+             enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[NUM_BATCH + j];
+        }
+    }
+    return enc;
+}
+                '''
+            )
+
+    def bind_forward(self):
+        """Binds a set of hypervectors together"""
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si *bind_forward(f4si *a, f4si *b, float* indices){
+    int i, j;
+    f4si *enc = (f4si *)calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[(int)indices[i]* NUM_BATCH + j];
+        }
+    }
+    return enc;
+}
+                '''
+            )
+
+    def bundle(self):
+        """Bundles two hypervectors together"""
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si *multiset(f4si *a){
+    int i, j;
+    f4si *enc = (f4si *)calloc(DIMENSIONS, sizeof(float));
+    for(i = 0; i < INPUT_DIM; i++){
+        for(j = 0; j < NUM_BATCH; ++j){
+            enc[j] += a[(NUM_BATCH * i) + j];
+        }
+    }
+    free(a);
+    return enc;
+}
+                '''
+            )
+
+    def bundle_forward(self):
+        """Bundles two hypervectors together"""
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si *multiset_forward(f4si *a, float* indices){
+    int i, j;
+    f4si *enc = (f4si *)calloc(DIMENSIONS, sizeof(float));
+    for(i = 0; i < INPUT_DIM; i++){
+        for(j = 0; j < NUM_BATCH; ++j){
+            enc[j] += a[(int)indices[i] * i + j];
+        }
+    }
+    free(a);
+    return enc;
+}
+                '''
+            )
+
     def define_hdc_functions(self):
         if self.type == Types.SEQUENTIAL:
             self.define_hdc_functions_sequential()
@@ -871,7 +946,7 @@ void train_loop(){
     for (i = 0; i < TRAIN; i++){
         res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
     }
-    map_range_clamp(TRAIN_DATA,TRAIN,''' + self.weight_var + '''_DIM-1, res);
+    map_range_clamp(TRAIN_DATA,TRAIN,INPUT_DIM-1, res);
     for(i = 0; i < TRAIN; i++){
         float* enc = encodings(res[i]);
         update_weight(enc,*(TRAIN_LABELS[i]));
@@ -893,7 +968,7 @@ float test_loop(){
     for (i = 0; i < TEST; i++){
         res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
     }
-    map_range_clamp(TEST_DATA,TEST,''' + self.weight_var + '''_DIM-1, res);
+    map_range_clamp(TEST_DATA,TEST,INPUT_DIM-1, res);
     int correct_pred = 0;
     for(i = 0; i < TEST; i++){
         float* enc = encodings(res[i]);
@@ -923,7 +998,7 @@ void train_loop(){
         res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
         enc[i] = (float *)calloc(DIMENSIONS, sizeof(float));
     }
-    map_range_clamp(TRAIN_DATA,TRAIN,''' + self.weight_var + '''_DIM-1, res);
+    map_range_clamp(TRAIN_DATA,TRAIN,INPUT_DIM-1, res);
     for(i = 0; i < TRAIN; i++){
         enc[i] = encodings(res[i]);
     }
@@ -950,7 +1025,7 @@ float test_loop(){
         res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
         enc[i] = (float *)calloc(DIMENSIONS, sizeof(float));
     }
-    map_range_clamp(TEST_DATA,TEST,''' + self.weight_var + '''_DIM-1, res);
+    map_range_clamp(TEST_DATA,TEST,INPUT_DIM-1, res);
     int correct_pred = 0;
     for(i = 0; i < TEST; i++){
         enc[i] = encodings(res[i]);
