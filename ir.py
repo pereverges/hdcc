@@ -4,7 +4,7 @@ from execution_type import Types
 
 class IntermediateRepresentation:
     def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun,
-                 train_size, test_size, num_threads, vector_size, type, memory_batch, input):
+                 train_size, test_size, num_threads, vector_size, type, memory_batch, input, input_dim, high, basic):
         self.name = name
         self.basic_name = self.get_basic_name(name)
         self.classes = classes
@@ -22,6 +22,9 @@ class IntermediateRepresentation:
         self.num_threads = num_threads
         self.memory_batch = memory_batch
         self.input = input
+        self.input_dim = input_dim
+        self.high = high
+        self.basic = basic
 
     def get_basic_name(self, name):
         temp = len(name)
@@ -36,12 +39,12 @@ class IntermediateRepresentation:
         for i in self.embeddings:
             if i[0] == 'LEVEL':
                 if i[1] == self.weight_var:
-                    embedding += ("\n    " + str(i[1].upper() + " = level_hv(" + 'INPUT_DIM' + ");"))
+                    embedding += ("\n    " + str(i[1].upper() + " = level_hv(" + str(i[1]) + '_DIM' + ");"))
                 else:
                     embedding += ("\n    " + str(i[1].upper() + " = level_hv(" + str(i[1]) + '_DIM' + ");"))
             if i[0] == 'RANDOM':
                 if i[1] == self.weight_var:
-                    embedding += ("\n    " + str(i[1].upper() + " = random_hv(" + 'INPUT_DIM' + ");"))
+                    embedding += ("\n    " + str(i[1].upper() + " = random_hv(" + str(i[1]) + '_DIM' + ");"))
                 else:
                     embedding += ("\n    " + str(i[1].upper() + " = random_hv(" + str(i[1]) + '_DIM' + ");"))
         return embedding
@@ -133,12 +136,11 @@ class IntermediateRepresentation:
             file.write('float *WEIGHT;\n')
             file.write('typedef float f4si __attribute__ ((vector_size (' + str(self.vector_size) + ')));\n')
 
+            file.write('#define INPUT_DIM ' + str(self.input_dim) + '\n')
+
             for i in self.embeddings:
                 file.write('f4si* ' + str(i[1]) + ';\n')
-                if i[1] == self.input:
-                    file.write('#define INPUT_DIM ' + str(i[2]) + '\n')
-                else:
-                    file.write('#define ' + str(i[1]) + '_DIM ' + str(i[2]) + '\n')
+                file.write('#define ' + str(i[1]) + '_DIM ' + str(i[2]) + '\n')
 
             file.write('#define BATCH ' + str(int(self.vector_size / 4)) + '\n')
             file.write('#define NUM_BATCH ' + str(int(self.dimensions / (self.vector_size / 4))) + '\n')
@@ -185,20 +187,17 @@ class IntermediateRepresentation:
             file.write('float *WEIGHT;\n')
             file.write('typedef float f4si __attribute__ ((vector_size (' + str(self.vector_size) + ')));\n')
 
-            input_dim = 0
+            file.write('#define INPUT_DIM ' + str(self.input_dim) + '\n')
+
             for i in self.embeddings:
                 file.write('f4si* ' + str(i[1]) + ';\n')
-                if i[1] == self.input:
-                    file.write('#define INPUT_DIM ' + str(i[2]) + '\n')
-                    input_dim = i[2]
-                else:
-                    file.write('#define ' + str(i[1]) + '_DIM ' + str(i[2]) + '\n')
+                file.write('#define ' + str(i[1]) + '_DIM ' + str(i[2]) + '\n')
 
             file.write('#define BATCH ' + str(int(self.vector_size / 4)) + '\n')
             file.write('#define NUM_BATCH ' + str(int(self.dimensions / (self.vector_size / 4))) + '\n')
             file.write('#define NUM_THREADS ' + str(self.num_threads) + '\n')
-            file.write('#define SPLIT_SIZE ' + str(math.floor(input_dim / self.num_threads)) + '\n')
-            file.write('#define SIZE ' + str(math.floor(input_dim / self.num_threads) * self.num_threads) + '\n')
+            file.write('#define SPLIT_SIZE ' + str(math.floor(self.input_dim / self.num_threads)) + '\n')
+            file.write('#define SIZE ' + str(math.floor(self.input_dim / self.num_threads) * self.num_threads) + '\n')
 
             file.write('float *TRAIN_DATA[TRAIN];\n')
             file.write('float *TRAIN_LABELS[TRAIN];\n')
@@ -224,20 +223,18 @@ class IntermediateRepresentation:
             file.write('float *WEIGHT;\n')
             file.write('typedef float f4si __attribute__ ((vector_size (' + str(self.vector_size) + ')));\n')
 
-            input_dim = 0
+            file.write('#define INPUT_DIM ' + str(self.input_dim) + '\n')
+
             for i in self.embeddings:
                 file.write('f4si* ' + str(i[1]) + ';\n')
-                if i[1] == self.input:
-                    file.write('#define INPUT_DIM ' + str(i[2]) + '\n')
-                    input_dim = i[2]
-                else:
-                    file.write('#define ' + str(i[1]) + '_DIM ' + str(i[2]) + '\n')
+                file.write('#define ' + str(i[1]) + '_DIM ' + str(i[2]) + '\n')
 
             file.write('#define BATCH ' + str(int(self.vector_size / 4)) + '\n')
             file.write('#define NUM_BATCH ' + str(int(self.dimensions / (self.vector_size / 4))) + '\n')
             file.write('#define NUM_THREADS ' + str(self.num_threads) + '\n')
-            file.write('#define SPLIT_SIZE ' + str(math.floor(input_dim / self.num_threads)) + '\n')
-            file.write('#define SIZE ' + str(math.floor(input_dim / self.num_threads) * self.num_threads) + '\n')
+            file.write('#define SPLIT_SIZE ' + str(math.floor(self.input_dim / self.num_threads)) + '\n')
+            file.write('#define SIZE ' + str(math.floor(self.input_dim / self.num_threads) * self.num_threads) + '\n')
+            file.write('#define HIGH ' + str(self.high) + '\n')
             file.write('int CORRECT_PREDICTIONS;\n')
 
             file.write('#define MEMORY_BATCH ' + str(self.memory_batch) + '\n')
@@ -649,7 +646,7 @@ float** map_range_clamp(float* arr[], int size, float out_max, float* res[]){
                 '''
 void map_range_clamp_one(float* arr, float out_max, float* res){
     float in_min = 0;
-    float in_max = 1;
+    float in_max = HIGH;
     float out_min = 0;
     int i, j;
     for (j = 0; j < INPUT_DIM; j++){
@@ -705,9 +702,8 @@ f4si *bind(f4si *a, f4si *b){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-f4si *bind_forward(f4si *a, f4si *b, float* indices){
+f4si *bind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
     int i, j;
-    f4si *enc = (f4si *)calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < NUM_BATCH; j++){
             enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[(int)indices[i]* NUM_BATCH + j];
@@ -715,6 +711,7 @@ f4si *bind_forward(f4si *a, f4si *b, float* indices){
     }
     return enc;
 }
+
                 '''
             )
 
@@ -731,7 +728,6 @@ f4si *multiset(f4si *a){
             enc[j] += a[(NUM_BATCH * i) + j];
         }
     }
-    free(a);
     return enc;
 }
                 '''
@@ -750,8 +746,37 @@ f4si *multiset_forward(f4si *a, float* indices){
             enc[j] += a[(int)indices[i] * i + j];
         }
     }
-    free(a);
     return enc;
+}
+                '''
+            )
+
+    def permute(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si *permute(f4si* arr, int d)
+{
+    int k, j;
+    int p = 1;
+    while (p <= d)
+    {
+      float last = arr[0][0];
+      for (j = 0; j < NUM_BATCH; j++){
+         for(k = 0; k < BATCH; k++){
+            if (k != BATCH-1 && j != BATCH){
+                if (k < BATCH-1){
+                    arr[NUM_BATCH+j][k] = arr[NUM_BATCH+j+1][k];
+                } else {
+                    arr[NUM_BATCH+j][k] = arr[NUM_BATCH+j][k+1];
+                }
+            }
+         }
+      }
+      arr[NUM_BATCH][BATCH-1] = last;
+      p++;
+    }
+    return arr;
 }
                 '''
             )
@@ -779,6 +804,11 @@ f4si *multiset_forward(f4si *a, float* indices){
     def define_hdc_functions_parallel_memory_efficient(self):
         self.define_random_hv()
         self.define_level_hv()
+        self.bind()
+        self.bind_forward()
+        self.bundle()
+        self.bundle_forward()
+        self.permute()
         self.define_encoding_function_parallel_memory_efficient()
 
     def define_random_hv(self):
@@ -946,7 +976,7 @@ void train_loop(){
     for (i = 0; i < TRAIN; i++){
         res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
     }
-    map_range_clamp(TRAIN_DATA,TRAIN,INPUT_DIM-1, res);
+    map_range_clamp(TRAIN_DATA,TRAIN,''' + self.weight_var + '''_DIM-1, res);
     for(i = 0; i < TRAIN; i++){
         float* enc = encodings(res[i]);
         update_weight(enc,*(TRAIN_LABELS[i]));
@@ -1053,7 +1083,7 @@ float test_loop(){
 void train_loop(){
     int i;
     for(i = 0; i < TRAIN; i++){
-        struct Task *task = (struct Task *)malloc(sizeof(struct Task));
+        struct Task *task = (struct Task *)calloc(1,sizeof(struct Task));
         task -> data = load_data_next_line(train_data);
         task -> label = load_labels_next_line(train_labels);
         mt_add_job(pool, &encode_train_task, task);
@@ -1071,7 +1101,7 @@ void train_loop(){
 float test_loop(){
     int i;
     for(i = 0; i < TEST; i++){
-        struct Task *task = (struct Task *)malloc(sizeof(struct Task));
+        struct Task *task = (struct Task *)calloc(1,sizeof(struct Task));
         task -> data = load_data_next_line(test_data);
         task -> label = load_labels_next_line(test_labels);
         mt_add_job(pool, &encode_test_task, task);

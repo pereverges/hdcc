@@ -14,7 +14,7 @@ reserved = {
     'SEQUENTIAL',
     'PARALLEL',
     'PARALLEL_MEMORY_EFFICIENT',
-
+    'PERMUTE',
 }
 
 
@@ -35,11 +35,14 @@ tokens = (
     'BIND',
     'BUNDLE',
     'MULTISET',
+    'PERMUTE',
 
     'LPAREN',
     'RPAREN',
     'LSBRAQ',
     'RSBRAQ',
+    'LCLAU',
+    'RCLAU',
 
     'SEMICOLON',
     'COLON',
@@ -49,6 +52,7 @@ tokens = (
 
     'TRAIN_SIZE',
     'TEST_SIZE',
+    'INPUT_DIM',
 
     'VECTOR_SIZE',
     'NUM_THREADS',
@@ -79,6 +83,8 @@ t_SEMICOLON = r'\;'
 t_COLON = r'\,'
 t_LSBRAQ = r'\['
 t_RSBRAQ = r'\]'
+t_LCLAU = r'\{'
+t_RCLAU = r'\}'
 t_DIMENSIONS = r'.DIMENSIONS'
 t_ENCODING = r'.ENCODING'
 t_BIND = r'BIND'
@@ -88,6 +94,7 @@ t_TRUE = r'TRUE'
 t_FALSE = r'FALSE'
 t_TRAIN_SIZE = r'.TRAIN_SIZE'
 t_TEST_SIZE = r'.TEST_SIZE'
+t_INPUT_DIM = r'.INPUT_DIM'
 t_VECTOR_SIZE = r'.VECTOR_SIZE'
 t_NUM_THREADS = r'.NUM_THREADS'
 t_TYPE = r'.TYPE'
