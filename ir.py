@@ -728,6 +728,7 @@ f4si *multiset(f4si *a){
             enc[j] += a[(NUM_BATCH * i) + j];
         }
     }
+    free(a);
     return enc;
 }
                 '''

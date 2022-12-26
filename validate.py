@@ -313,13 +313,13 @@ void encode_test_task(void* task){'''
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc(DIMENSIONS, sizeof(int));
+    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
     ''' + var + '''
     hard_quantize((float*)enc,1);
     update_weight((float*)enc,label);
-    //free(enc);
-    //free(indices);
-    //free(data);
+    free(enc);
+    free(indices);
+    free(data);
 }
 
 ''' + fun_head_test + '''
@@ -327,16 +327,16 @@ void encode_test_task(void* task){'''
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc(DIMENSIONS, sizeof(int));
+    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
     ''' + var + '''
     float *l = linear((float*)enc);
     if(argmax(l) == label){
-        //free(l);
+        free(l);
         update_correct_predictions();
     }
-    //free(indices);
-    //free(data);
-    //free(enc);
+    free(indices);
+    free(data);
+    free(enc);
 }
                             '''
 
