@@ -331,12 +331,12 @@ void encode_test_task(void* task){'''
     ''' + var + '''
     float *l = linear((float*)enc);
     if(argmax(l) == label){
-        free(l);
+        //free(l);
         update_correct_predictions();
     }
-    free(indices);
-    free(data);
-    free(enc);
+    //free(indices);
+    //free(data);
+    //free(enc);
 }
                             '''
 
