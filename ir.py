@@ -722,13 +722,45 @@ f4si *bind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
                 '''
 f4si *multiset(f4si *a){
     int i, j;
-    f4si *enc = (f4si *)calloc(DIMENSIONS, sizeof(float));
-    for(i = 0; i < INPUT_DIM; i++){
+    for(i = 1; i < INPUT_DIM; i++){
         for(j = 0; j < NUM_BATCH; ++j){
-            enc[j] += a[(NUM_BATCH * i) + j];
+            a[j] += a[(NUM_BATCH * i) + j];
         }
     }
-    free(a);
+    return a;
+}
+                '''
+            )
+
+    def multiset_bind_forward(self):
+        """Bundles two hypervectors together"""
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si *multiset_bind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            enc[j] += a[(NUM_BATCH * i) + j] * b[(int)indices[i]* NUM_BATCH + j];
+        }
+    }
+    return enc;
+}
+                '''
+            )
+
+    def multiset_bind(self):
+        """Bundles two hypervectors together"""
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si *multiset_bind(f4si *a, f4si *b, f4si* enc){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+             enc[j] += a[(NUM_BATCH * i) + j] * b[NUM_BATCH + j];
+        }
+    }
     return enc;
 }
                 '''
@@ -741,13 +773,12 @@ f4si *multiset(f4si *a){
                 '''
 f4si *multiset_forward(f4si *a, float* indices){
     int i, j;
-    f4si *enc = (f4si *)calloc(DIMENSIONS, sizeof(float));
     for(i = 0; i < INPUT_DIM; i++){
         for(j = 0; j < NUM_BATCH; ++j){
-            enc[j] += a[(int)indices[i] * i + j];
+            a[j] += a[(int)indices[i] * i + j];
         }
     }
-    return enc;
+    return a;
 }
                 '''
             )
@@ -765,16 +796,12 @@ f4si *permute(f4si* arr, int d)
       float last = arr[0][0];
       for (j = 0; j < NUM_BATCH; j++){
          for(k = 0; k < BATCH; k++){
-            if (k != BATCH-1 && j != BATCH){
-                if (k < BATCH-1){
-                    arr[NUM_BATCH+j][k] = arr[NUM_BATCH+j+1][k];
-                } else {
-                    arr[NUM_BATCH+j][k] = arr[NUM_BATCH+j][k+1];
-                }
-            }
+             if (k < BATCH-1){
+                arr[j][k] = arr[j][k+1];
+             }
          }
       }
-      arr[NUM_BATCH][BATCH-1] = last;
+      arr[NUM_BATCH-1][BATCH-1] = last;
       p++;
     }
     return arr;
@@ -810,6 +837,8 @@ f4si *permute(f4si* arr, int d)
         self.bundle()
         self.bundle_forward()
         self.permute()
+        self.multiset_bind()
+        self.multiset_bind_forward()
         self.define_encoding_function_parallel_memory_efficient()
 
     def define_random_hv(self):

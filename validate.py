@@ -42,7 +42,7 @@ class hdccAST:
             if self.dimensions is not None and self.type is not None:
                 self.wait = False
                 enc = ''
-                _, self.encoding = self.unpack_encoding(params[1], enc)
+                _, self.encoding, _, _ = self.unpack_encoding(params[1], enc)
                 self.encoding_build(self.encoding, self.encoding)
                 print("EEEENC", self.encoding)
             else:
@@ -61,8 +61,7 @@ class hdccAST:
             self.dimensions = params[1]
             if self.wait is not None and self.type is not None:
                 enc = ''
-                enc = ''
-                _, self.encoding = self.unpack_encoding(self.wait, enc)
+                _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
                 self.encoding_build(self.encoding, self.encoding)
                 print("EEEENC", self.encoding)
                 self.wait = None
@@ -74,7 +73,7 @@ class hdccAST:
             self.num_threads = params[1]
             if self.wait is not None:
                 enc = ''
-                _, self.encoding = self.unpack_encoding(self.wait, enc)
+                _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
                 self.encoding_build(self.encoding, self.encoding)
                 print("EEEENC", self.encoding)
                 self.wait = None
@@ -145,35 +144,43 @@ class hdccAST:
             if i[1] == 'BIND':
                 self.multibind = True
                 if i[3] == self.weight:
-                    b1, enc1 = self.unpack_encoding(i[2],enc)
-                    b2, enc2 = self.unpack_encoding(i[3],enc)
+                    b1, enc1, _, _ = self.unpack_encoding(i[2],enc)
+                    b2, enc2, _, _ = self.unpack_encoding(i[3],enc)
                     enc += enc1 + enc2
-                    enc += 'enc = bind_forward(' + b1 + ',' + b2 + ', indices, enc' + ');\n'
-                    return 'enc', enc
+                    enc += '\n  enc = bind_forward(' + b1 + ',' + b2 + ', indices, enc' + ');'
+                    return 'enc', enc, 'bind_forward', [b1,b2]
                 else:
                     b1, enc1 = self.unpack_encoding(i[2],enc)
                     b2, enc2 = self.unpack_encoding(i[3],enc)
                     enc += enc1 + enc2
-                    enc += 'enc = bind(' + b1 + ',' + b2 + ', enc);\n'
-                    return 'enc', enc
+                    enc += '\n  enc = bind(' + b1 + ',' + b2 + ', enc);'
+                    return 'enc', enc, 'bind', [b1,b2]
             elif i[1] == 'BUNDLE':
                 return '    bundle(' + self.unpack_encoding(i[1][2]) + ')', '', 'bundle'
             elif i[1] == 'PERMUTE':
-                b, enc_aux = self.unpack_encoding(i[2], enc)
+                b, enc_aux, _, _ = self.unpack_encoding(i[2], enc)
                 enc += enc_aux
-                enc += '    enc = permute(' + b + ',' + str(i[3]) + ');\n'
-                return 'enc', enc
+                enc += '\n    enc = permute(' + b + ',' + str(i[3]) + ');'
+                return 'enc', enc, '', ''
             elif i[1] == 'MULTISET':
                 self.multiset = True
-                b, enc_aux = self.unpack_encoding(i[2], enc)
-                enc += enc_aux
-                enc += '    enc = multiset(' + b + ');\n'
-                return 'enc', enc
+                b, enc_aux, fun, varaibles = self.unpack_encoding(i[2], enc)
+                if fun == 'bind':
+                    enc = enc_aux[:enc_aux.rfind('\n')]
+                    enc += '\n    enc = multiset_bind(' + varaibles[0] + ',' + varaibles[1] + ', enc);'
+                elif fun == 'bind_forward':
+                    print('ENC',enc_aux[:enc_aux.rfind('\n')],enc_aux.rfind('\n'))
+                    enc = enc_aux[:enc_aux.rfind('\n')]
+                    enc += '\n    enc = multiset_bind_forward(' + varaibles[0] + ',' + varaibles[1] + ', indices, enc' + ');'
+                else:
+                    enc += enc_aux
+                    enc += '    enc = multiset(' + b + ');\n'
+                return 'enc', enc, '', ''
             else:
                 self.set_used_var(i)
                 if i == self.weight:
-                    return self.weight, enc
-                return i.upper(), enc
+                    return self.weight, enc, '', ''
+                return i.upper(), enc, '', ''
 
     def set_used_var(self, var):
         self.used_vars.add(var)
@@ -313,7 +320,7 @@ void encode_test_task(void* task){'''
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    f4si * enc = calloc(DIMENSIONS, sizeof(int));
     ''' + var + '''
     hard_quantize((float*)enc,1);
     update_weight((float*)enc,label);
@@ -327,7 +334,7 @@ void encode_test_task(void* task){'''
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    f4si * enc = calloc(DIMENSIONS, sizeof(int));
     ''' + var + '''
     float *l = linear((float*)enc);
     if(argmax(l) == label){
