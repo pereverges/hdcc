@@ -80,7 +80,7 @@ def emg_hand_labels():
 def loadEMG():
     from torchhd.datasets import EMGHandGestures
     ds = EMGHandGestures(
-        "../data", download=True, subjects=[1]
+        "../data", download=True, subjects=[4]
     )
 
     train_size = int(len(ds) * 0.7)
