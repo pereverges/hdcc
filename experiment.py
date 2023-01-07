@@ -9,11 +9,11 @@ folder = 'experiments/'
 out_file = sys.argv[1]
 
 dimensions = [64, 128, 512, 1024, 4096, 10240]
-files = ['mnist', 'voicehd']
-train_size = [60000, 6238]
-test_size = [10000, 1559]
+files = ['emgp','emgpp','emgppp','emgpppp','emgppppp','mnist', 'voicehd']
+train_size = [368, 345, 338, 333, 235, 60000, 6238]
+test_size = [158, 148, 145, 143, 101, 10000, 1559]
 vector_size = 128
-num_threads = 6
+num_threads = 4
 type_exec = 'PARALLEL_MEMORY_EFFICIENT'
 repetitions = 1
 
@@ -48,4 +48,36 @@ for index, file in enumerate(files):
                     res = subprocess.check_output(["./"+str(file) + str(dim), "data/MNIST/mnist_train_data", "data/MNIST/mnist_train_labels", "data/MNIST/mnist_test_data", "data/MNIST/mnist_test_labels"]).decode(sys.stdout.encoding)
                 if file == 'voicehd':
                     res = subprocess.check_output(["./"+str(file) + str(dim), "data/ISOLET/isolet_train_data", "data/ISOLET/isolet_train_labels", "data/ISOLET/isolet_test_data", "data/ISOLET/isolet_test_labels"]).decode(sys.stdout.encoding)
+                if file == 'emgp':
+                    res = subprocess.check_output(["./"+str(file) + str(dim),
+                         "data/EMG_based_hand_gesture/patient_1_train_data",
+                         "data/EMG_based_hand_gesture/patient_1_train_labels",
+                         "data/EMG_based_hand_gesture/patient_1_test_data",
+                         "data/EMG_based_hand_gesture/patient_1_test_labels"]).decode(sys.stdout.encoding)
+                if file == 'emgpp':
+                    res = subprocess.check_output(
+                        ["./" + str(file) + str(dim),
+                         "data/EMG_based_hand_gesture/patient_2_train_data",
+                         "data/EMG_based_hand_gesture/patient_2_train_labels",
+                         "data/EMG_based_hand_gesture/patient_2_test_data",
+                         "data/EMG_based_hand_gesture/patient_2_test_labels"]).decode(sys.stdout.encoding)
+                if file == 'emgppp':
+                    res = subprocess.check_output(
+                        ["./" + str(file) + str(dim), "data/EMG_based_hand_gesture/patient_3_train_data",
+                         "data/EMG_based_hand_gesture/patient_3_train_labels",
+                         "data/EMG_based_hand_gesture/patient_3_test_data",
+                         "data/EMG_based_hand_gesture/patient_3_test_labels"]).decode(sys.stdout.encoding)
+                if file == 'emgpppp':
+                    res = subprocess.check_output(
+                        ["./" + str(file) + str(dim), "data/EMG_based_hand_gesture/patient_4_train_data",
+                         "data/EMG_based_hand_gesture/patient_4_train_labels",
+                         "data/EMG_based_hand_gesture/patient_4_test_data",
+                         "data/EMG_based_hand_gesture/patient_4_test_labels"]).decode(sys.stdout.encoding)
+                if file == 'emgppppp':
+                    res = subprocess.check_output(
+                        ["./" + str(file) + str(dim), "data/EMG_based_hand_gesture/patient_5_train_data",
+                         "data/EMG_based_hand_gesture/patient_5_train_labels",
+                         "data/EMG_based_hand_gesture/patient_5_test_data",
+                         "data/EMG_based_hand_gesture/patient_5_test_labels"]).decode(sys.stdout.encoding)
+
                 output.writelines(res)
