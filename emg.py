@@ -111,7 +111,7 @@ def experiment(subjects=[0]):
         n = 'emgpppp'
     if subjects == [4]:
         n = 'emgppppp'
-    print(n+','+str(DIMENSIONS) +',' + str(time.time()-t)+','+str((suma/len(test_ld))*100))
+    print(n+','+str(DIMENSIONS) +',' + str(time.time()-t)+','+str((suma/len(test_ld))))
 
 # Make a model for each subject
 experiment([0])
