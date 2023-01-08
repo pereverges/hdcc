@@ -55,7 +55,7 @@ with torch.no_grad():
         model.classify.weight[labels] += samples_hv
     model.classify.weight[:] = F.normalize(model.classify.weight)
 
-accuracy = torchmetrics.Accuracy()
+accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=len(train_ds.classes))
 
 with torch.no_grad():
     for samples, labels in test_ld:

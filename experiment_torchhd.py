@@ -8,7 +8,7 @@ folder = 'experiments/'
 out_file = sys.argv[1]
 
 dimensions = [64, 128, 512, 1024, 4096, 10240]
-files = ['mnist', 'voicehd']
+files = ['voicehd', 'emg', 'mnist']
 repetitions = 1
 
 with open(folder + out_file + now, "a") as output:
