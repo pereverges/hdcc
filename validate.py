@@ -44,7 +44,6 @@ class hdccAST:
                 enc = ''
                 _, self.encoding, _, _ = self.unpack_encoding(params[1], enc)
                 self.encoding_build(self.encoding, self.encoding)
-                print("EEEENC", self.encoding)
             else:
                 self.wait = params[1]
             # print('Resulting encoding', encoding)
@@ -63,7 +62,6 @@ class hdccAST:
                 enc = ''
                 _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
                 self.encoding_build(self.encoding, self.encoding)
-                print("EEEENC", self.encoding)
                 self.wait = None
         if action == 'TRAIN_SIZE':
             self.train_size = params[1]
@@ -75,7 +73,6 @@ class hdccAST:
                 enc = ''
                 _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
                 self.encoding_build(self.encoding, self.encoding)
-                print("EEEENC", self.encoding)
                 self.wait = None
         if action == 'VECTOR_SIZE':
             self.vector_size = params[1]
@@ -160,7 +157,12 @@ class hdccAST:
             elif i[1] == 'PERMUTE':
                 b, enc_aux, _, _ = self.unpack_encoding(i[2], enc)
                 enc += enc_aux
-                enc += '\n    enc = permute(' + b + ',' + str(i[3]) + ');'
+                enc += '\n    enc = permute(' + b + ',' + str(i[3]) + ',0,1);'
+                return 'enc', enc, '', ''
+            elif i[1] == 'NGRAM':
+                b, enc_aux, _, _ = self.unpack_encoding(i[2], enc)
+                enc += enc_aux
+                enc += '\n    enc = ngram(' + b + ',' + str(i[3]) + ');'
                 return 'enc', enc, '', ''
             elif i[1] == 'MULTISET':
                 self.multiset = True
@@ -169,7 +171,6 @@ class hdccAST:
                     enc = enc_aux[:enc_aux.rfind('\n')]
                     enc += '\n    enc = multiset_bind(' + varaibles[0] + ',' + varaibles[1] + ', enc);'
                 elif fun == 'bind_forward':
-                    print('ENC',enc_aux[:enc_aux.rfind('\n')],enc_aux.rfind('\n'))
                     enc = enc_aux[:enc_aux.rfind('\n')]
                     enc += '\n    enc = multiset_bind_forward(' + varaibles[0] + ',' + varaibles[1] + ', indices, enc' + ');'
                 else:
@@ -188,7 +189,6 @@ class hdccAST:
     def set_declared_vars(self,params):
         if type(params[1]) == list:
             for i in params[1]:
-                print(isinstance(i[3], list))
                 if i[1] == 'WEIGHT':
                     self.declared_vars.add(i[2])
                     self.weight = i[2]
@@ -320,7 +320,7 @@ void encode_test_task(void* task){'''
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc(DIMENSIONS, sizeof(int));
+    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
     ''' + var + '''
     hard_quantize((float*)enc,1);
     update_weight((float*)enc,label);
@@ -334,7 +334,7 @@ void encode_test_task(void* task){'''
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc(DIMENSIONS, sizeof(int));
+    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
     ''' + var + '''
     float *l = linear((float*)enc);
     if(argmax(l) == label){

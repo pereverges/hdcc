@@ -715,6 +715,40 @@ f4si *bind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
                 '''
             )
 
+    def ngram(self):
+        """Ngram a set of hypervectors together"""
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+        '''
+f4si *bind_aux(f4si *a, f4si *b, int n){
+    int i, j;
+    f4si *enc = (f4si *)calloc(DIMENSIONS * n, sizeof(int));
+    for(i = 0; i < n; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+             enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[NUM_BATCH + j];
+        }
+    }
+    free(a);
+    free(b);
+    return enc;
+}
+
+f4si* ngram(f4si* arr, int n){
+    int i, j,k;
+    f4si * res = calloc(DIMENSIONS*(INPUT_DIM-n-1), sizeof(int));
+    f4si * sample = calloc(DIMENSIONS*(INPUT_DIM-n-1), sizeof(int));
+
+    res = permute(arr,n-1,0,INPUT_DIM-(n-1));
+    for (i = 1; i < n; i++){
+        sample = permute(arr,n-i-1,i,INPUT_DIM-(n-i));
+        res = bind_aux(res,sample,INPUT_DIM-n-1);
+    }
+    //free(arr);
+    return multiset(res);
+}
+        '''
+            )
+
     def bundle(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
@@ -787,24 +821,39 @@ f4si *multiset_forward(f4si *a, float* indices){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-f4si *permute(f4si* arr, int d)
+f4si *permute(f4si* arr, int d, int ini, int fi)
 {
-    int k, j;
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+
+    int k, j, i;
     int p = 1;
-    while (p <= d)
+    float last;
+    d = DIMENSIONS-d;
+    while (p <= 1)
     {
-      float last = arr[0][0];
-      for (j = 0; j < NUM_BATCH; j++){
-         for(k = 0; k < BATCH; k++){
-             if (k < BATCH-1){
-                arr[j][k] = arr[j][k+1];
+        for (i = ini; i < fi; ++i){
+          if (p == 1){
+            last = arr[i*NUM_BATCH][0];
+          } else {
+            last = res[(i-ini)*NUM_BATCH][0];
+          }
+          for (j = 0; j < NUM_BATCH; j++){
+             for(k = 0; k < BATCH; k++){
+                if (j+1 < NUM_BATCH){
+                    if (p == 1){
+                        res[(i-ini)*NUM_BATCH+j][k] = arr[i*NUM_BATCH+j+1][k];
+                    } else {
+                       res[(i-ini)*NUM_BATCH+j][k] = res[(i-ini)*NUM_BATCH+j+1][k];
+                    }
+                } else {
+                    res[(i-ini)*NUM_BATCH+j][k] = last;
+                }
              }
-         }
+          }
       }
-      arr[NUM_BATCH-1][BATCH-1] = last;
-      p++;
+        p++;
     }
-    return arr;
+    return res;
 }
                 '''
             )
@@ -839,6 +888,7 @@ f4si *permute(f4si* arr, int d)
         self.permute()
         self.multiset_bind()
         self.multiset_bind_forward()
+        self.ngram()
         self.define_encoding_function_parallel_memory_efficient()
 
     def define_random_hv(self):
@@ -906,7 +956,6 @@ float* encodings(float* x){
 
     def define_encoding_function_parallel(self):
         with open(self.name.lower() + '.c', 'a') as file:
-            print('enc', self.encoding_fun)
             file.write(self.encoding_fun)
 
     def define_encoding_parallel(self):
@@ -1303,3 +1352,52 @@ int main(int argc, char **argv) {
 }              
                 '''
             )
+
+
+            ''''
+f4si *bind_aux(f4si *a, f4si *b, int n){
+    int i, j;
+    f4si *enc = (f4si *)calloc(DIMENSIONS * n, sizeof(int));
+    for(i = 0; i < n; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+             enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[NUM_BATCH + j];
+        }
+    }
+    free(a);
+    free(b);
+    return enc;
+}
+
+f4si* ngram(f4si* arr, int n){
+    int i, j,k;
+    f4si * res = calloc(DIMENSIONS*(INPUT_DIM-n-1), sizeof(int));
+    f4si * sample = calloc(DIMENSIONS*(INPUT_DIM-n-1), sizeof(int));
+
+    res = permute(arr,n-1,0,INPUT_DIM-(n-1));
+    for (i = 1; i < n; i++){
+        sample = permute(arr,n-i-1,i,INPUT_DIM-(n-i));
+        res = bind_aux(res,sample,INPUT_DIM-n-1);
+    }
+    //free(arr);
+    return multiset(res);
+}
+        
+void encode_train_task(void* task){
+    float* data = ((struct Task*)task) -> data;
+    int label = ((struct Task*)task) -> label;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    map_range_clamp_one(data,SIGNALS_DIM-1, indices);
+    f4si * enc = calloc(DIMENSIONS, sizeof(int));
+    
+    enc = ngram(CHANNELS,1);
+    hard_quantize((float*)enc,1);
+    update_weight((float*)enc,label);
+    free(enc);
+    free(indices);
+    free(data);
+}
+
+
+
+              
+            '''

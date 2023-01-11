@@ -15,6 +15,7 @@ reserved = {
     'PARALLEL',
     'PARALLEL_MEMORY_EFFICIENT',
     'PERMUTE',
+    'NGRAM'
 }
 
 
@@ -36,6 +37,7 @@ tokens = (
     'BUNDLE',
     'MULTISET',
     'PERMUTE',
+    'NGRAM',
 
     'LPAREN',
     'RPAREN',
@@ -91,6 +93,7 @@ t_BIND = r'BIND'
 t_CLASSES = r'.CLASSES'
 t_DEBUG = r'.DEBUG'
 t_TRUE = r'TRUE'
+t_NGRAM = r'NGRAM'
 t_FALSE = r'FALSE'
 t_TRAIN_SIZE = r'.TRAIN_SIZE'
 t_TEST_SIZE = r'.TEST_SIZE'

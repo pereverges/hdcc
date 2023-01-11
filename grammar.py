@@ -189,6 +189,10 @@ def p_permute(p):
     '''expression : PERMUTE LPAREN expression COLON NUMBER RPAREN'''
     p[0] = p.lineno(1), p[1], p[3], p[5]
 
+def p_ngram(p):
+    '''expression : NGRAM LPAREN expression COLON NUMBER RPAREN'''
+    p[0] = p.lineno(1), p[1], p[3], p[5]
+
 def p_bundle(p):
     """expression : BUNDLE LPAREN expression COLON expression RPAREN"""
     p[0] = p.lineno(1), p[1], p[3], p[5]
