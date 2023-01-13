@@ -9,7 +9,8 @@ from torchhd import functional
 from torchhd import embeddings
 from torchhd.datasets.isolet import ISOLET
 import sys
-
+from guppy import hpy
+#hp = hpy()
 BATCH_SIZE = 1
 DIMENSIONS = int(sys.argv[1])
 device = torch.device("cpu")
@@ -64,4 +65,7 @@ with torch.no_grad():
         predictions = torch.argmax(outputs, dim=-1)
         accuracy.update(predictions.cpu(), labels)
 
-print('voicehd,'+str(DIMENSIONS) +',' + str(time.time()-t)+','+str((accuracy.compute().item())))
+print('voicehd,'+str(DIMENSIONS) +',' + str(time.time()-t)+','+str((accuracy.compute().item())), end='')
+
+#mem = hp.heap()
+#print(','+str(mem[len(mem)-1]).split()[-3])

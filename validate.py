@@ -26,7 +26,7 @@ class hdccAST:
         self.memory_batch = 200
         self.high = 0
         self.basic = True
-        self.required_arguments = {'NAME', 'EMBEDDING', 'ENCODING', 'CLASSES', 'DIMENSIONS', 'TEST_SIZE', 'TRAIN_SIZE', 'TYPE', 'INPUT_DIM'}
+        self.required_arguments = {'NAME', 'ENCODING', 'CLASSES', 'DIMENSIONS', 'TEST_SIZE', 'TRAIN_SIZE', 'TYPE', 'INPUT_DIM'}
 
     def get_ast_obj(self):
         return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, self.encoding_fun, self.train_size, self.test_size, self.num_threads, self.vector_size, self.type, self.memory_batch, self.input, self.input_dim, self.high, self.basic
@@ -50,6 +50,14 @@ class hdccAST:
         if action == 'EMBEDDING':
             self.set_declared_vars(params)
             # print(self.declared_vars)
+        if action == 'WEIGHT_EMBED':
+            self.declared_vars.add(params[1])
+            self.weight = params[1]
+            if isinstance(params[2], list):
+                self.embeddings.append([params[2][0], params[1], params[2][1]])
+                self.high = params[3]
+            else:
+                self.embeddings.append([params[2], params[1], params[3]])
         if action == 'NAME':
             self.name = params[1].lower()
         if action == 'CLASSES':
@@ -146,9 +154,15 @@ class hdccAST:
                     enc += enc1 + enc2
                     enc += '\n  enc = bind_forward(' + b1 + ',' + b2 + ', indices, enc' + ');'
                     return 'enc', enc, 'bind_forward', [b1,b2]
+                elif i[2] == self.weight:
+                    b1, enc1, _, _ = self.unpack_encoding(i[2], enc)
+                    b2, enc2, _, _ = self.unpack_encoding(i[3], enc)
+                    enc += enc1 + enc2
+                    enc += '\n  enc = bind_forward(' + b2 + ',' + b1 + ', indices, enc' + ');'
+                    return 'enc', enc, 'bind_forward', [b2, b1]
                 else:
-                    b1, enc1 = self.unpack_encoding(i[2],enc)
-                    b2, enc2 = self.unpack_encoding(i[3],enc)
+                    b1, enc1, _, _ = self.unpack_encoding(i[2],enc)
+                    b2, enc2, _, _ = self.unpack_encoding(i[3],enc)
                     enc += enc1 + enc2
                     enc += '\n  enc = bind(' + b1 + ',' + b2 + ', enc);'
                     return 'enc', enc, 'bind', [b1,b2]
@@ -207,7 +221,8 @@ class hdccAST:
                         self.embeddings.append([i[3], i[2], i[4]])
                 else:
                     self.declared_vars.add(i[1])
-                    if isinstance(i[3], list):
+                    if isinstance(i[2], list):
+                        print("heigh", i[3])
                         self.high = i[3]
                         self.embeddings.append([i[2][0], i[1], i[2][1], i[3]])
                     else:
@@ -320,7 +335,7 @@ void encode_test_task(void* task){'''
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    f4si * enc = calloc(DIMENSIONS, sizeof(int));
     ''' + var + '''
     hard_quantize((float*)enc,1);
     update_weight((float*)enc,label);
@@ -334,7 +349,7 @@ void encode_test_task(void* task){'''
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    f4si * enc = calloc(DIMENSIONS, sizeof(int));
     ''' + var + '''
     float *l = linear((float*)enc);
     if(argmax(l) == label){

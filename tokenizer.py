@@ -15,13 +15,15 @@ reserved = {
     'PARALLEL',
     'PARALLEL_MEMORY_EFFICIENT',
     'PERMUTE',
-    'NGRAM'
+    'NGRAM',
+    'WEIGHT_EMBED'
 }
 
 
 tokens = (
     'NAME',
 
+    'WEIGHT_EMBED',
     'EMBEDDING',
     'ID',
     'RANDOM',
@@ -94,6 +96,7 @@ t_CLASSES = r'.CLASSES'
 t_DEBUG = r'.DEBUG'
 t_TRUE = r'TRUE'
 t_NGRAM = r'NGRAM'
+t_WEIGHT_EMBED = r'.WEIGHT_EMBED'
 t_FALSE = r'FALSE'
 t_TRAIN_SIZE = r'.TRAIN_SIZE'
 t_TEST_SIZE = r'.TEST_SIZE'

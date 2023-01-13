@@ -2,34 +2,49 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 folder = 'experiments/'
-file_hdcc = folder + 'opengpu_num_threads_20_vector_size_hdcc_08_01_2023_00:03:30'
-file_torchhd = folder + 'opengpu_torchhd_08_01_2023_07:21:50'
+#file_hdcc = folder + 'opengpu_num_threads_20_vector_size_hdcc_08_01_2023_00:03:30'
+file_hdcc = folder + 'mac_num_threads_4_vector_size_hdcc_13_01_2023_07:49:22'
+file_torchhd = folder + 'mac_torchhd_13_01_2023_13:37:40'
+#file_torchhd = folder + 'opengpu_torchhd_08_01_2023_07:21:50'
 
 dataset_hdcc = pd.read_csv(file_hdcc)
 dataset_torchhd = pd.read_csv(file_torchhd)
 dataset_hdcc_names = dataset_hdcc.Application.unique()
 first = True
+machines = 3
 
+    
 for index, key in enumerate(dataset_hdcc_names):
-    fig, axs = plt.subplots(2)
+    fig, axs = plt.subplots(3,machines)
+    for i in range(machines):
+        time_hdc = dataset_hdcc[:][dataset_hdcc.Application == key][["Dimensions","Application","Time"]]
+        time_hdc['Tool'] = 'HDCC'
+        time_torchhd = dataset_torchhd[:][dataset_torchhd.Application == key][["Dimensions","Application","Time"]]
+        time_torchhd['Tool'] = 'TORCHHD'
+    
+        accuracy_hdc = dataset_hdcc[:][dataset_hdcc.Application == key][["Dimensions","Application","Accuracy"]]
+        accuracy_hdc['Tool'] = 'HDCC'
+        accuracy_torchhd = dataset_torchhd[:][dataset_torchhd.Application == key][["Dimensions","Application","Accuracy"]]
+        accuracy_torchhd['Tool'] = 'TORCHHD'
+    
+        memory_hdc = dataset_hdcc[:][dataset_hdcc.Application == key][["Dimensions","Application","Memory"]]
+        memory_hdc['Tool'] = 'HDCC'
+        memory_torchhd = dataset_torchhd[:][dataset_torchhd.Application == key][["Dimensions","Application","Memory"]]
+        memory_torchhd['Tool'] = 'TORCHHD'
+        # axs[1,i].set_ylim(ymin=0.6)
+        axs[0,i].plot(time_hdc['Dimensions'], time_hdc['Time'], label='HDCC')
+        axs[0,i].plot(time_torchhd['Dimensions'], time_torchhd['Time'], label='TORCHHD')
+        axs[1,i].plot(accuracy_hdc['Dimensions'], accuracy_hdc['Accuracy'], label='HDCC')
+        axs[1,i].plot(accuracy_torchhd['Dimensions'], accuracy_torchhd['Accuracy'], label='TORCHHD')
+        axs[2,i].plot(accuracy_hdc['Dimensions'], memory_hdc['Memory'], label='HDCC')
+        axs[2,i].plot(accuracy_torchhd['Dimensions'], memory_torchhd['Memory'], label='TORCHHD')
 
-    time_hdc = dataset_hdcc[:][dataset_hdcc.Application == key][["Dimensions","Application","Time"]]
-    time_hdc['Tool'] = 'HDCC'
-    time_torchhd = dataset_torchhd[:][dataset_torchhd.Application == key][["Dimensions","Application","Time"]]
-    time_torchhd['Tool'] = 'TORCHHD'
-
-    accuracy_hdc = dataset_hdcc[:][dataset_hdcc.Application == key][["Dimensions","Application","Accuracy"]]
-    accuracy_hdc['Tool'] = 'HDCC'
-    accuracy_torchhd = dataset_torchhd[:][dataset_torchhd.Application == key][["Dimensions","Application","Accuracy"]]
-    accuracy_torchhd['Tool'] = 'TORCHHD'
-    axs[0].plot(time_hdc['Dimensions'], time_hdc['Time'], label='HDCC')
-    axs[0].plot(time_torchhd['Dimensions'], time_torchhd['Time'], label='TORCHHD')
-    axs[1].plot(accuracy_hdc['Dimensions'], accuracy_hdc['Accuracy'], label='HDCC')
-    axs[1].plot(accuracy_torchhd['Dimensions'], accuracy_torchhd['Accuracy'], label='TORCHHD')
-    axs[0].legend()
-    axs[0].set_title(label='Time')
-    axs[1].legend()
-    axs[1].set_title(label='Accuracy')
-    fig.suptitle(key)
+        axs[0,i].legend()
+        axs[0,i].set_title(label='Time')
+        axs[1,i].legend()
+        axs[1,i].set_title(label='Accuracy')
+        axs[2,i].legend()
+        axs[2,i].set_title(label='Memory')
+        fig.suptitle(key)
     plt.show()
-
+    

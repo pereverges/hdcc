@@ -295,10 +295,10 @@ struct DataReader* set_load_data(char* path, struct DataReader* data_reader){
     data_reader -> fp = fopen(path, "r");
     data_reader -> line = NULL;
     data_reader -> len = 0;
-    
+
     if (data_reader -> fp == NULL)
         exit(EXIT_FAILURE);
-    
+
     return data_reader;
 }
             '''
@@ -336,21 +336,21 @@ void load_data(float* data[], char* path){
     def load_data_memory_efficient(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
-                    '''
-float* load_data_next_line(struct DataReader* data_reader){
-    float* data = (float *) calloc(INPUT_DIM, sizeof(float));
-    char* token;
-    if ((data_reader -> read = getline(&data_reader -> line, &data_reader -> len, data_reader -> fp)) != -1) {
-        token = strtok(data_reader -> line, ",");
-        for (int i = 0; i < INPUT_DIM; i++){
-          *(data + i) = (float) atof(token);
-          token = strtok(NULL, ",");
-        }
-    }
-    return data;
-}
                 '''
-                )
+float* load_data_next_line(struct DataReader* data_reader){
+float* data = (float *) calloc(INPUT_DIM, sizeof(float));
+char* token;
+if ((data_reader -> read = getline(&data_reader -> line, &data_reader -> len, data_reader -> fp)) != -1) {
+    token = strtok(data_reader -> line, ",");
+    for (int i = 0; i < INPUT_DIM; i++){
+      *(data + i) = (float) atof(token);
+      token = strtok(NULL, ",");
+    }
+}
+return data;
+}
+            '''
+            )
 
     def load_labels(self):
         with open(self.name.lower() + '.c', 'a') as file:
@@ -719,34 +719,42 @@ f4si *bind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
         """Ngram a set of hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
-        '''
-f4si *bind_aux(f4si *a, f4si *b, int n){
-    int i, j;
-    f4si *enc = (f4si *)calloc(DIMENSIONS * n, sizeof(int));
-    for(i = 0; i < n; ++i){
-        for(j = 0; j < NUM_BATCH; j++){
-             enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[NUM_BATCH + j];
+                '''
+        f4si *bind_aux(f4si *a, f4si *b, int n){
+            int i, j;
+            f4si *enc = (f4si *)calloc(DIMENSIONS * n, sizeof(int));
+            for(i = 0; i < n; ++i){
+                for(j = 0; j < NUM_BATCH; j++){
+                     enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[(NUM_BATCH * i) + j];
+                }
+            }
+            return enc;
         }
-    }
-    free(a);
-    free(b);
-    return enc;
-}
-
-f4si* ngram(f4si* arr, int n){
-    int i, j,k;
-    f4si * res = calloc(DIMENSIONS*(INPUT_DIM-n-1), sizeof(int));
-    f4si * sample = calloc(DIMENSIONS*(INPUT_DIM-n-1), sizeof(int));
-
-    res = permute(arr,n-1,0,INPUT_DIM-(n-1));
-    for (i = 1; i < n; i++){
-        sample = permute(arr,n-i-1,i,INPUT_DIM-(n-i));
-        res = bind_aux(res,sample,INPUT_DIM-n-1);
-    }
-    //free(arr);
-    return multiset(res);
-}
-        '''
+        
+        f4si *multiset_aux(f4si *a, int n){
+            int i, j;
+            for(i = 1; i < n; i++){
+                for(j = 0; j < NUM_BATCH; ++j){
+                    a[j] += a[(NUM_BATCH * i) + j];
+                }
+            }
+            return a;
+        }
+        
+        
+        f4si* ngram(f4si* arr, int n){
+            int i, j,k,a;
+            f4si * res = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
+            f4si * sample = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
+        
+            res = permute(arr,n-1,0,INPUT_DIM-(n-1));
+            for (i = 1; i < n; i++){
+                sample = permute(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
+                res = bind_aux(res,sample,INPUT_DIM-(n-1));
+            }
+            return multiset_aux(res,INPUT_DIM-(n-1));
+        }
+                '''
             )
 
     def bundle(self):
@@ -821,38 +829,32 @@ f4si *multiset_forward(f4si *a, float* indices){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-f4si *permute(f4si* arr, int d, int ini, int fi)
+ f4si *permute(f4si* arr, int dd, int ini, int fi)
 {
-    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
 
     int k, j, i;
-    int p = 1;
     float last;
-    d = DIMENSIONS-d;
-    while (p <= 1)
-    {
-        for (i = ini; i < fi; ++i){
-          if (p == 1){
-            last = arr[i*NUM_BATCH][0];
-          } else {
-            last = res[(i-ini)*NUM_BATCH][0];
-          }
-          for (j = 0; j < NUM_BATCH; j++){
-             for(k = 0; k < BATCH; k++){
-                if (j+1 < NUM_BATCH){
-                    if (p == 1){
-                        res[(i-ini)*NUM_BATCH+j][k] = arr[i*NUM_BATCH+j+1][k];
-                    } else {
-                       res[(i-ini)*NUM_BATCH+j][k] = res[(i-ini)*NUM_BATCH+j+1][k];
-                    }
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+         for(k = 0; k < BATCH; k++){
+            if ((BATCH*j)+k+dd < ((BATCH*NUM_BATCH))){
+                if (k+dd >= BATCH){
+                    int num = (k+dd) % BATCH;
+                    res[(i-ini)*NUM_BATCH+j+1][num] = arr[i*NUM_BATCH+j][k];
                 } else {
-                    res[(i-ini)*NUM_BATCH+j][k] = last;
+                    res[(i-ini)*NUM_BATCH+j][k+dd] = arr[i*NUM_BATCH+j][k];
                 }
-             }
-          }
+            } else {
+                int num = (k+dd) % BATCH;
+                res[(i-ini-1)*NUM_BATCH+j+(1)][num] = arr[i*NUM_BATCH+j][k];
+            }
+         }
+
       }
-        p++;
+
     }
+
     return res;
 }
                 '''
@@ -1030,7 +1032,7 @@ float* encoding_test(float* x){
             self.define_train_and_test_sequential()
         if self.type == Types.PARALLEL:
             self.define_train_and_test_parallel()
-        if self.type ==  Types.PARALLEL_MEMORY_EFFICIENT:
+        if self.type == Types.PARALLEL_MEMORY_EFFICIENT:
             self.define_train_and_test_parallel_memory_efficient()
 
     def define_train_and_test_sequential(self):
@@ -1070,30 +1072,30 @@ void train_loop(){
     def define_test_loop_sequential(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
-                    '''
+                '''
 float test_loop(){
-    float *res[TEST];
-    int i;
-    for (i = 0; i < TEST; i++){
-        res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
-    }
-    map_range_clamp(TEST_DATA,TEST,INPUT_DIM-1, res);
-    int correct_pred = 0;
-    for(i = 0; i < TEST; i++){
-        float* enc = encodings(res[i]);
-        float *l = linear(enc);
-        int index = argmax(l);
-        if((int)index == (int)*(TEST_LABELS[i])){
-            correct_pred += 1;
-        }
-        free(l);
-        free(res[i]);
-        free(enc);
-    }
-    return correct_pred/(float)TEST;
+float *res[TEST];
+int i;
+for (i = 0; i < TEST; i++){
+    res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
 }
-                    '''
-                )
+map_range_clamp(TEST_DATA,TEST,INPUT_DIM-1, res);
+int correct_pred = 0;
+for(i = 0; i < TEST; i++){
+    float* enc = encodings(res[i]);
+    float *l = linear(enc);
+    int index = argmax(l);
+    if((int)index == (int)*(TEST_LABELS[i])){
+        correct_pred += 1;
+    }
+    free(l);
+    free(res[i]);
+    free(enc);
+}
+return correct_pred/(float)TEST;
+}
+                '''
+            )
 
     def define_train_loop_parallel(self):
         with open(self.name.lower() + '.c', 'a') as file:
@@ -1241,7 +1243,7 @@ int main(int argc, char **argv) {
             else:
                 file.write(
                     '''
-        printf("''' + self.basic_name + ''',%d,%f \\n", DIMENSIONS, acc);
+        printf("''' + self.basic_name + ''',%d,%f", DIMENSIONS, acc);
                     '''
                 )
 
@@ -1337,13 +1339,13 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = end.tv_sec - begin.tv_sec;
     elapsed += (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
-    printf("''' + self.basic_name + ''',%d,%f,%f\\n", DIMENSIONS,elapsed, acc);
+    printf("''' + self.basic_name + ''',%d,%f,%f", DIMENSIONS,elapsed, acc);
                     '''
                 )
             else:
                 file.write(
                     '''
-        printf("''' + self.basic_name + ''',%d,%f\\n", DIMENSIONS, acc);
+        printf("''' + self.basic_name + ''',%d,%f", DIMENSIONS, acc);
                     '''
                 )
 
@@ -1352,7 +1354,6 @@ int main(int argc, char **argv) {
 }              
                 '''
             )
-
 
             ''''
 f4si *bind_aux(f4si *a, f4si *b, int n){
@@ -1381,14 +1382,14 @@ f4si* ngram(f4si* arr, int n){
     //free(arr);
     return multiset(res);
 }
-        
+
 void encode_train_task(void* task){
     float* data = ((struct Task*)task) -> data;
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,SIGNALS_DIM-1, indices);
     f4si * enc = calloc(DIMENSIONS, sizeof(int));
-    
+
     enc = ngram(CHANNELS,1);
     hard_quantize((float*)enc,1);
     update_weight((float*)enc,label);
@@ -1398,6 +1399,71 @@ void encode_train_task(void* task){
 }
 
 
+f4si *permute_forward(f4si* arr, int dd, int ini, int fi)
+{
 
-              
+    int k, j, i;
+    float last;
+    f4si * res = malloc(DIMENSIONS*(fi-ini)* sizeof(int));
+
+    for (i = ini; i < fi; ++i){
+      //last = arr[i*NUM_BATCH][0];
+      //last = arr[(i*NUM_BATCH)+NUM_BATCH-1][BATCH-1];
+      //printf(" last %f",last);
+      for (j = 0; j < NUM_BATCH; j++){
+         for(k = 0; k < BATCH; k++){
+            if ((BATCH*j)+k+dd < ((BATCH*NUM_BATCH))){
+                if (k+dd >= BATCH){
+                    int num = (k+dd) % BATCH;
+                    res[(i-ini)*NUM_BATCH+j+1][num] = arr[i*NUM_BATCH+j][k];
+
+                } else {
+                    res[(i-ini)*NUM_BATCH+j][k+dd] = arr[i*NUM_BATCH+j][k];
+                }
+            } else {
+                int num = (k+dd) % BATCH;
+                res[(i-ini)*NUM_BATCH+j-1][num] = arr[i*NUM_BATCH+j][k];
+            }
+         }
+
+      }
+    }
+
+    return res;
+}
+
+
+           f4si *permute_backward(f4si* arr, int dd, int ini, int fi)
+{
+
+    int k, j, i;
+    float last;
+    f4si * res = malloc(DIMENSIONS*(fi-ini)* sizeof(int));
+
+    for (i = ini; i < fi; ++i){
+      //last = arr[i*NUM_BATCH][0];
+      //last = arr[(i*NUM_BATCH)+NUM_BATCH-1][BATCH-1];
+      //printf(" last %f",last);
+      for (j = 0; j < NUM_BATCH; j++){
+         for(k = 0; k < BATCH; k++){
+            if ((BATCH*j)+k+dd < ((BATCH*NUM_BATCH))){
+                if (k+dd >= BATCH){
+                    int num = (k+dd) % BATCH;
+                    res[(i-ini)*NUM_BATCH+j][k] = arr[i*NUM_BATCH+j+1][num];
+
+                } else {
+                    res[(i-ini)*NUM_BATCH+j][k] = arr[i*NUM_BATCH+j][k+dd];
+                }
+            } else {
+                int num = (k+dd) % BATCH;
+                res[(i-ini)*NUM_BATCH+j][k] = arr[i*NUM_BATCH+j-1][num];
+            }
+         }
+
+      }
+    }
+
+    return res;
+}
+
             '''

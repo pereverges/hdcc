@@ -3,6 +3,10 @@ import sys
 import subprocess
 from datetime import datetime
 
+import os
+from collections import deque
+from subprocess import Popen, PIPE
+
 now = '_hdcc_' + datetime.now().strftime("%d_%m_%Y_%H:%M:%S")
 folder = 'experiments/'
 
@@ -20,7 +24,7 @@ repetitions = 1
 out_file += '_num_threads_' + str(num_threads) + '_vector_size'
 
 with open(folder + out_file + now, "a") as output:
-    output.write('Application,Dimensions,Time,Accuracy\n')
+    output.write('Application,Dimensions,Time,Accuracy,Memory\n')
 
 for index, file in enumerate(files):
     for i in range(repetitions):
@@ -38,22 +42,51 @@ for index, file in enumerate(files):
             lines.append('.VECTOR_SIZE ' + str(vector_size) + ';\n')
 
             with open(file + str(dim) +'.hdcc', 'w') as f:
-                print(lines)
+                #print(lines)
                 f.writelines(lines)
 
             os.system('python3 main.py ' + str(file) + str(dim) +'.hdcc')
             with open(folder+out_file+now, "a") as output:
-                print(subprocess.check_output('make'))
+                subprocess.check_output('make')
+                DEVNULL = open(os.devnull, 'wb', 0)
+
                 if file == 'mnist':
-                    res = subprocess.check_output(["./"+str(file) + str(dim), "data/MNIST/mnist_train_data", "data/MNIST/mnist_train_labels", "data/MNIST/mnist_test_data", "data/MNIST/mnist_test_labels"]).decode(sys.stdout.encoding)
+                    res = subprocess.check_output(["./"+str(file) + str(dim),
+                                                   "data/MNIST/mnist_train_data",
+                                                   "data/MNIST/mnist_train_labels",
+                                                   "data/MNIST/mnist_test_data",
+                                                   "data/MNIST/mnist_test_labels"]).decode(sys.stdout.encoding)
+                    p = subprocess.Popen(["/usr/bin/time", "-l", "./" + str(file) + str(dim),
+                                       "data/MNIST/mnist_train_data",
+                                       "data/MNIST/mnist_train_labels",
+                                       "data/MNIST/mnist_test_data",
+                                       "data/MNIST/mnist_test_labels"], stdout=DEVNULL, stderr=PIPE)
+
                 if file == 'voicehd':
-                    res = subprocess.check_output(["./"+str(file) + str(dim), "data/ISOLET/isolet_train_data", "data/ISOLET/isolet_train_labels", "data/ISOLET/isolet_test_data", "data/ISOLET/isolet_test_labels"]).decode(sys.stdout.encoding)
+                    res = subprocess.check_output(["./"+str(file) + str(dim),
+                                                   "data/ISOLET/isolet_train_data",
+                                                   "data/ISOLET/isolet_train_labels",
+                                                   "data/ISOLET/isolet_test_data",
+                                                   "data/ISOLET/isolet_test_labels"]).decode(sys.stdout.encoding)
+                    p = subprocess.Popen(["/usr/bin/time", "-l", "./" + str(file) + str(dim),
+                                          "data/ISOLET/isolet_train_data",
+                                           "data/ISOLET/isolet_train_labels",
+                                           "data/ISOLET/isolet_test_data",
+                                           "data/ISOLET/isolet_test_labels"], stdout=DEVNULL, stderr=PIPE)
+
                 if file == 'emgp':
                     res = subprocess.check_output(["./"+str(file) + str(dim),
                          "data/EMG_based_hand_gesture/patient_1_train_data",
                          "data/EMG_based_hand_gesture/patient_1_train_labels",
                          "data/EMG_based_hand_gesture/patient_1_test_data",
                          "data/EMG_based_hand_gesture/patient_1_test_labels"]).decode(sys.stdout.encoding)
+
+                    p = subprocess.Popen(["/usr/bin/time","-l","./"+str(file) + str(dim),
+                             "data/EMG_based_hand_gesture/patient_1_train_data",
+                             "data/EMG_based_hand_gesture/patient_1_train_labels",
+                             "data/EMG_based_hand_gesture/patient_1_test_data",
+                             "data/EMG_based_hand_gesture/patient_1_test_labels"], stdout=DEVNULL, stderr=PIPE)
+
                 if file == 'emgpp':
                     res = subprocess.check_output(
                         ["./" + str(file) + str(dim),
@@ -61,18 +94,36 @@ for index, file in enumerate(files):
                          "data/EMG_based_hand_gesture/patient_2_train_labels",
                          "data/EMG_based_hand_gesture/patient_2_test_data",
                          "data/EMG_based_hand_gesture/patient_2_test_labels"]).decode(sys.stdout.encoding)
+
+                    p = subprocess.Popen(["/usr/bin/time","-l","./"+str(file) + str(dim),
+                             "data/EMG_based_hand_gesture/patient_2_train_data",
+                             "data/EMG_based_hand_gesture/patient_2_train_labels",
+                             "data/EMG_based_hand_gesture/patient_2_test_data",
+                             "data/EMG_based_hand_gesture/patient_2_test_labels"], stdout=DEVNULL, stderr=PIPE)
                 if file == 'emgppp':
                     res = subprocess.check_output(
                         ["./" + str(file) + str(dim), "data/EMG_based_hand_gesture/patient_3_train_data",
                          "data/EMG_based_hand_gesture/patient_3_train_labels",
                          "data/EMG_based_hand_gesture/patient_3_test_data",
                          "data/EMG_based_hand_gesture/patient_3_test_labels"]).decode(sys.stdout.encoding)
+
+                    p = subprocess.Popen(["/usr/bin/time","-l","./"+str(file) + str(dim),
+                             "data/EMG_based_hand_gesture/patient_3_train_data",
+                             "data/EMG_based_hand_gesture/patient_3_train_labels",
+                             "data/EMG_based_hand_gesture/patient_3_test_data",
+                             "data/EMG_based_hand_gesture/patient_3_test_labels"], stdout=DEVNULL, stderr=PIPE)
                 if file == 'emgpppp':
                     res = subprocess.check_output(
                         ["./" + str(file) + str(dim), "data/EMG_based_hand_gesture/patient_4_train_data",
                          "data/EMG_based_hand_gesture/patient_4_train_labels",
                          "data/EMG_based_hand_gesture/patient_4_test_data",
                          "data/EMG_based_hand_gesture/patient_4_test_labels"]).decode(sys.stdout.encoding)
+
+                    p = subprocess.Popen(["/usr/bin/time","-l","./"+str(file) + str(dim),
+                             "data/EMG_based_hand_gesture/patient_4_train_data",
+                             "data/EMG_based_hand_gesture/patient_4_train_labels",
+                             "data/EMG_based_hand_gesture/patient_4_test_data",
+                             "data/EMG_based_hand_gesture/patient_4_test_labels"], stdout=DEVNULL, stderr=PIPE)
                 if file == 'emgppppp':
                     res = subprocess.check_output(
                         ["./" + str(file) + str(dim), "data/EMG_based_hand_gesture/patient_5_train_data",
@@ -80,4 +131,13 @@ for index, file in enumerate(files):
                          "data/EMG_based_hand_gesture/patient_5_test_data",
                          "data/EMG_based_hand_gesture/patient_5_test_labels"]).decode(sys.stdout.encoding)
 
+                    p = subprocess.Popen(["/usr/bin/time","-l","./"+str(file) + str(dim),
+                             "data/EMG_based_hand_gesture/patient_5_train_data",
+                             "data/EMG_based_hand_gesture/patient_5_train_labels",
+                             "data/EMG_based_hand_gesture/patient_5_test_data",
+                             "data/EMG_based_hand_gesture/patient_5_test_labels"], stdout=DEVNULL, stderr=PIPE)
+                with p.stderr:
+                    q = deque(iter(p.stderr.readline, b''))
+                rc = p.wait()
+                res += ","+b''.join(q).decode().strip().split()[-4]+"\n"
                 output.writelines(res)

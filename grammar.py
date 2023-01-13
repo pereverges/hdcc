@@ -99,12 +99,12 @@ def p_memory_batch(p):
     p[0] = astDirective(action='MEMORY_BATCH', params=[p.lineno(1), p[2]])
 
 def p_embeddings_list(p):
-    '''embeddings : input weight embedding_list '''
-    p[0] = [p[1], p[2]] + p[3]
+    '''embeddings : embedding_list '''
+    p[0] = p[1]
 
-def p_input(p):
-    '''input : LCLAU ID embedding_type NUMBER RCLAU '''
-    p[0] = p.lineno(1), 'INPUT', p[2].upper(), p[3], p[4]
+def p_weight_embed(p):
+    '''directive : WEIGHT_EMBED LCLAU ID embedding_type NUMBER RCLAU '''
+    p[0] = astDirective(action='WEIGHT_EMBED', params=[p.lineno(1), p[3], p[4], p[5]])
 
 '''
 def p_value_and_embedding_list(p):
@@ -120,11 +120,6 @@ def p_embedding_list_none(p):
 def p_embedding_list_some(p):
     '''embedding_list : embedding_param embedding_list'''
     p[0] = [p[1]] + p[2]
-
-
-def p_embedding_param(p):
-    '''weight : LPAREN ID embedding_type NUMBER RPAREN'''
-    p[0] = p.lineno(1), 'WEIGHT', p[2].upper(), p[3], p[4]
 
 
 def p_weight(p):
@@ -159,6 +154,8 @@ def p_train_size_directive(p):
 def p_test_size_directive(p):
     '''directive : TEST_SIZE NUMBER '''
     p[0] = astDirective(action='TEST_SIZE', params=[p.lineno(1), p[2]])
+
+
 
 
 def p_vector_size_directive(p):
