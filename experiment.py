@@ -21,10 +21,19 @@ num_threads = 4
 type_exec = 'PARALLEL_MEMORY_EFFICIENT'
 repetitions = 1
 
+position = 52
+ti = '-v'
+if 'mac' == out_file:
+    position = -4
+    ti = '-l'
+
+
 out_file += '_num_threads_' + str(num_threads) + '_vector_size'
 
 with open(folder + out_file + now, "a") as output:
     output.write('Application,Dimensions,Time,Accuracy,Memory\n')
+
+
 
 for index, file in enumerate(files):
     for i in range(repetitions):
@@ -56,7 +65,7 @@ for index, file in enumerate(files):
                                                    "data/MNIST/mnist_train_labels",
                                                    "data/MNIST/mnist_test_data",
                                                    "data/MNIST/mnist_test_labels"]).decode(sys.stdout.encoding)
-                    p = subprocess.Popen(["/usr/bin/time", "-l", "./" + str(file) + str(dim),
+                    p = subprocess.Popen(["/usr/bin/time", ti, "./" + str(file) + str(dim),
                                        "data/MNIST/mnist_train_data",
                                        "data/MNIST/mnist_train_labels",
                                        "data/MNIST/mnist_test_data",
@@ -68,7 +77,7 @@ for index, file in enumerate(files):
                                                    "data/ISOLET/isolet_train_labels",
                                                    "data/ISOLET/isolet_test_data",
                                                    "data/ISOLET/isolet_test_labels"]).decode(sys.stdout.encoding)
-                    p = subprocess.Popen(["/usr/bin/time", "-l", "./" + str(file) + str(dim),
+                    p = subprocess.Popen(["/usr/bin/time", ti, "./" + str(file) + str(dim),
                                           "data/ISOLET/isolet_train_data",
                                            "data/ISOLET/isolet_train_labels",
                                            "data/ISOLET/isolet_test_data",
@@ -81,7 +90,7 @@ for index, file in enumerate(files):
                          "data/EMG_based_hand_gesture/patient_1_test_data",
                          "data/EMG_based_hand_gesture/patient_1_test_labels"]).decode(sys.stdout.encoding)
 
-                    p = subprocess.Popen(["/usr/bin/time","-l","./"+str(file) + str(dim),
+                    p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
                              "data/EMG_based_hand_gesture/patient_1_train_data",
                              "data/EMG_based_hand_gesture/patient_1_train_labels",
                              "data/EMG_based_hand_gesture/patient_1_test_data",
@@ -95,7 +104,7 @@ for index, file in enumerate(files):
                          "data/EMG_based_hand_gesture/patient_2_test_data",
                          "data/EMG_based_hand_gesture/patient_2_test_labels"]).decode(sys.stdout.encoding)
 
-                    p = subprocess.Popen(["/usr/bin/time","-l","./"+str(file) + str(dim),
+                    p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
                              "data/EMG_based_hand_gesture/patient_2_train_data",
                              "data/EMG_based_hand_gesture/patient_2_train_labels",
                              "data/EMG_based_hand_gesture/patient_2_test_data",
@@ -107,7 +116,7 @@ for index, file in enumerate(files):
                          "data/EMG_based_hand_gesture/patient_3_test_data",
                          "data/EMG_based_hand_gesture/patient_3_test_labels"]).decode(sys.stdout.encoding)
 
-                    p = subprocess.Popen(["/usr/bin/time","-l","./"+str(file) + str(dim),
+                    p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
                              "data/EMG_based_hand_gesture/patient_3_train_data",
                              "data/EMG_based_hand_gesture/patient_3_train_labels",
                              "data/EMG_based_hand_gesture/patient_3_test_data",
@@ -119,7 +128,7 @@ for index, file in enumerate(files):
                          "data/EMG_based_hand_gesture/patient_4_test_data",
                          "data/EMG_based_hand_gesture/patient_4_test_labels"]).decode(sys.stdout.encoding)
 
-                    p = subprocess.Popen(["/usr/bin/time","-l","./"+str(file) + str(dim),
+                    p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
                              "data/EMG_based_hand_gesture/patient_4_train_data",
                              "data/EMG_based_hand_gesture/patient_4_train_labels",
                              "data/EMG_based_hand_gesture/patient_4_test_data",
@@ -131,7 +140,7 @@ for index, file in enumerate(files):
                          "data/EMG_based_hand_gesture/patient_5_test_data",
                          "data/EMG_based_hand_gesture/patient_5_test_labels"]).decode(sys.stdout.encoding)
 
-                    p = subprocess.Popen(["/usr/bin/time","-l","./"+str(file) + str(dim),
+                    p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
                              "data/EMG_based_hand_gesture/patient_5_train_data",
                              "data/EMG_based_hand_gesture/patient_5_train_labels",
                              "data/EMG_based_hand_gesture/patient_5_test_data",
