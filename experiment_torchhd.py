@@ -32,9 +32,10 @@ for file in files:
                         except:
                             print('Error')
                         DEVNULL = open(os.devnull, 'wb', 0)
-                        res += ',' + str(float(
-                            subprocess.check_output(['mprof', 'peak']).decode(sys.stdout.encoding).split()[
-                                -6]) * 1000000) + '\n'
+                        memor = subprocess.check_output(['mprof', 'peak']).decode(sys.stdout.encoding).split()[-6]
+                        if memor == 'last':
+                            memor = subprocess.check_output(['mprof', 'peak']).decode(sys.stdout.encoding).split()[-2]
+                        res += ',' + str(float(memor) * 1000000) + '\n'
 
                         output.writelines(res)
                 else:

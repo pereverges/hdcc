@@ -17,11 +17,11 @@ files = ['emgp','emgpp','emgppp','emgpppp','emgppppp','mnist', 'voicehd']
 train_size = [368, 345, 338, 333, 235, 60000, 6238]
 test_size = [158, 148, 145, 143, 101, 10000, 1559]
 vector_size = 128
-num_threads = 4
+num_threads = 20
 type_exec = 'PARALLEL_MEMORY_EFFICIENT'
 repetitions = 1
 
-position = 52
+position = 58
 ti = '-v'
 if 'mac' == out_file:
     position = -4
@@ -148,5 +148,9 @@ for index, file in enumerate(files):
                 with p.stderr:
                     q = deque(iter(p.stderr.readline, b''))
                 rc = p.wait()
-                res += ","+b''.join(q).decode().strip().split()[-4]+"\n"
+                #print(str(b''.join(q).decode().strip().split()[40:60]))
+                if position == 58:
+                    res += ","+str(int(b''.join(q).decode().strip().split()[position])*1000)+"\n"    
+                else:
+                    res += ","+b''.join(q).decode().strip().split()[position]+"\n"
                 output.writelines(res)
