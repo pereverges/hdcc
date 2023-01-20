@@ -50,6 +50,8 @@ train_ld = data.DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False)
 test_ds = Languages("../data", train=False, transform=transform, download=False)
 test_ld = data.DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False)
 
+t = time.time()
+
 
 class Model(nn.Module):
     def __init__(self, num_classes, size):
@@ -70,7 +72,6 @@ class Model(nn.Module):
         logit = self.classify(enc)
         return logit
 
-t = time.time()
 
 model = Model(len(train_ds.classes), NUM_TOKENS)
 model = model.to(device)
@@ -97,4 +98,4 @@ with torch.no_grad():
         predictions = torch.argmax(outputs, dim=-1)
         if predictions == labels:
             correct_pred += 1
-print('mnist,' + str(DIMENSIONS) + ',' + str(time.time() - t) + ',' + str((correct_pred / len(labels) / 1000)), end='')
+print('language recognition,' + str(DIMENSIONS) + ',' + str(time.time() - t) + ',' + str((correct_pred / 21000)), end='')

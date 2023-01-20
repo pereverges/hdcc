@@ -896,24 +896,56 @@ f4si *forward(f4si *a, float* indices, f4si* enc){
 }
 
 
-f4si* ngram(f4si* arr, int n){
-    int i, j,k,a;
+f4si* ngram(f4si* arr, const int n){
+    int i, j, k;
     f4si * res = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
-    f4si * sample = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
+    f4si aux;
+    float n1, p1;
+    float n2, p2;
+    for (i = 0; i < (INPUT_DIM-(n-1)); ++i){
+        for (k = 0; k < n; ++k){
+            for (j = 0; j < NUM_BATCH; j++){
+                if (k == 0){
+                    if (j == NUM_BATCH-1){
+                       aux = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+                       aux[0] = p1;
+                       aux[1] = p2;
+                   } else if (j == 0){
+                       aux = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+                       p1 = aux[0];
+                       p2 = aux[1];
+                   } else {
+                       aux = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+                       n1 = aux[0];
+                       n2 = aux[1];
+                       aux[0] = p1;
+                       aux[1] = p2;
+                       p1 = n1;
+                       p2 = n2;
+                   }
 
-    res = permute2(arr,n-1,0,INPUT_DIM-(n-1));
-    for (i = 1; i < n; i++){
-        if (n-i-1 == 1){
-            sample = permute1(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
-        } else if (n-i-1 == 2){
-            sample = permute2(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
-        } else if (n-i-1 == 3){
-            sample = permute3(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
-        } else {
-            sample = permute0(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
+                    res[i*NUM_BATCH+j] = aux; // 2 pos
+                } else if (k == n-1){
+                    res[i*NUM_BATCH+j] = res[i*NUM_BATCH+j] * arr[(i+k)*NUM_BATCH+j];
+                } else {
+                       if (j == NUM_BATCH-1){
+                           aux = __builtin_shufflevector(arr[(i+k)*NUM_BATCH+j],arr[(i+k)*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+                           aux[0] = p1;
+                       } else if (j == 0){
+                           aux = __builtin_shufflevector(arr[(i+k)*NUM_BATCH+j],arr[(i+k)*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+                           p1 = aux[0];
+                       } else {
+                           aux = __builtin_shufflevector(arr[(i+k)*NUM_BATCH+j],arr[(i+k)*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+                           n1 = aux[0];
+                           aux[0] = p1;
+                           p1 = n1;
+                       }
+                    //res[i*NUM_BATCH+j] = res[(i)*NUM_BATCH+j] * shuffle(arr[(i+k)*NUM_BATCH+j], (n-1-k))
+
+                    res[i*NUM_BATCH+j] = aux * res[i*NUM_BATCH+j];
+                }
+              }
         }
-
-        res = bind_aux(res,sample,INPUT_DIM-(n-1));
     }
     free(arr);
     return multiset_aux(res,INPUT_DIM-(n-1), res);
@@ -2188,4 +2220,16 @@ int main(int argc, char **argv) {
     printf("lang,%d,%f,%f", DIMENSIONS,elapsed, acc);
 
 }
+
+
+
+
+
+f4si *permute0(f4si* arr, int dd, int ini, int fi)
+{
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    __builtin_memcpy_inline(res, arr + ini*NUM_BATCH, DIMENSIONS*(fi-ini)*sizeof(int));
+    return res;
+}-maltivec
             '''
