@@ -13,11 +13,12 @@ folder = 'experiments/'
 out_file = sys.argv[1]
 
 dimensions = [64, 128, 512, 1024, 4096, 10240]
-files = ['emgp','emgpp','emgppp','emgpppp','emgppppp','mnist', 'voicehd']
-train_size = [368, 345, 338, 333, 235, 60000, 6238]
-test_size = [158, 148, 145, 143, 101, 10000, 1559]
+files = ['languages']
+#,'emgp','emgpp','emgppp','emgpppp','emgppppp','mnist', 'voicehd']
+train_size = [210032, 368, 345, 338, 333, 235, 60000, 6238]
+test_size = [21000, 158, 148, 145, 143, 101, 10000, 1559]
 vector_size = 128
-num_threads = 20
+num_threads = 8
 type_exec = 'PARALLEL_MEMORY_EFFICIENT'
 repetitions = 1
 
@@ -145,6 +146,18 @@ for index, file in enumerate(files):
                              "data/EMG_based_hand_gesture/patient_5_train_labels",
                              "data/EMG_based_hand_gesture/patient_5_test_data",
                              "data/EMG_based_hand_gesture/patient_5_test_labels"], stdout=DEVNULL, stderr=PIPE)
+                if file == 'languages':
+                    res = subprocess.check_output(
+                        ["./" + str(file) + str(dim), "data/LANGUAGES/train_data.txt",
+                         "data/LANGUAGES/train_labels.txt",
+                         "data/LANGUAGES/test_data.txt",
+                         "data/LANGUAGES/test_labels.txt"]).decode(sys.stdout.encoding)
+
+                    p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                             "data/LANGUAGES/train_data.txt",
+                             "data/LANGUAGES/train_labels.txt",
+                             "data/LANGUAGES/test_data.txt",
+                             "data/LANGUAGES/test_labels.txt"], stdout=DEVNULL, stderr=PIPE)
                 with p.stderr:
                     q = deque(iter(p.stderr.readline, b''))
                 rc = p.wait()

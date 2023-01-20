@@ -4,7 +4,7 @@ from execution_type import Types
 
 class IntermediateRepresentation:
     def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun,
-                 train_size, test_size, num_threads, vector_size, type, memory_batch, input, input_dim, high, basic):
+                 train_size, test_size, num_threads, vector_size, type, input, input_dim, high, basic, padding):
         self.name = name
         self.basic_name = self.get_basic_name(name)
         self.classes = classes
@@ -20,11 +20,11 @@ class IntermediateRepresentation:
         self.test_size = test_size
         self.vector_size = vector_size
         self.num_threads = num_threads
-        self.memory_batch = memory_batch
         self.input = input
         self.input_dim = input_dim
         self.high = high
         self.basic = basic
+        self.padding = padding
 
     def get_basic_name(self, name):
         temp = len(name)
@@ -43,6 +43,11 @@ class IntermediateRepresentation:
                 else:
                     embedding += ("\n    " + str(i[1].upper() + " = level_hv(" + str(i[1]) + '_DIM' + ");"))
             if i[0] == 'RANDOM':
+                if i[1] == self.weight_var:
+                    embedding += ("\n    " + str(i[1].upper() + " = random_hv(" + str(i[1]) + '_DIM' + ");"))
+                else:
+                    embedding += ("\n    " + str(i[1].upper() + " = random_hv(" + str(i[1]) + '_DIM' + ");"))
+            if i[0] == 'RANDOM_PADDING':
                 if i[1] == self.weight_var:
                     embedding += ("\n    " + str(i[1].upper() + " = random_hv(" + str(i[1]) + '_DIM' + ");"))
                 else:
@@ -237,7 +242,6 @@ class IntermediateRepresentation:
             file.write('#define HIGH ' + str(self.high) + '\n')
             file.write('int CORRECT_PREDICTIONS;\n')
 
-            file.write('#define MEMORY_BATCH ' + str(self.memory_batch) + '\n')
             file.write('ThreadPool *pool;\n')
 
             file.write('struct DataReader {\n')
@@ -257,6 +261,9 @@ class IntermediateRepresentation:
             file.write('    float* data;\n')
             file.write('    int label;\n')
             file.write('};\n')
+
+            if self.padding is not None:
+                file.write('float padding = '+str(self.padding)+'.0;')
 
     # ------------------- DEFINE DATA LOADERS ------------------- #
 
@@ -647,6 +654,9 @@ float** map_range_clamp(float* arr[], int size, float out_max, float* res[]){
 void map_range_clamp_one(float* arr, float out_max, float* res){
     float in_min = 0;
     float in_max = HIGH;
+    if (in_max == 0.0){
+        in_max = CLASSES;
+    }
     float out_min = 0;
     int i, j;
     for (j = 0; j < INPUT_DIM; j++){
@@ -720,40 +730,194 @@ f4si *bind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-        f4si *bind_aux(f4si *a, f4si *b, int n){
-            int i, j;
-            f4si *enc = (f4si *)calloc(DIMENSIONS * n, sizeof(int));
-            for(i = 0; i < n; ++i){
-                for(j = 0; j < NUM_BATCH; j++){
-                     enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[(NUM_BATCH * i) + j];
-                }
-            }
-            return enc;
+f4si *permute1(f4si* arr, int dd, int ini, int fi)
+ {
+
+    int k, j, i;
+    float n1, p1;
+    float n2, p2;
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+       if (j == NUM_BATCH-1){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+           res[(i-ini)*NUM_BATCH][0] = res[(i-ini)*NUM_BATCH+j][0];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+       } else if (j == 0){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+           p1 = res[(i-ini)*NUM_BATCH+j][0];
+       } else {
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+           n1= res[(i-ini)*NUM_BATCH+j][0];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+           p1 = n1;
+       }
+
+      }
+
+    }
+
+    return res;
+}
+
+ f4si *permute2(f4si* arr, int dd, int ini, int fi)
+{
+
+    int k, j, i;
+    float n1, p1;
+    float n2, p2;
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+       if (j == NUM_BATCH-1){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+           res[(i-ini)*NUM_BATCH][0] = res[(i-ini)*NUM_BATCH+j][0];
+           res[(i-ini)*NUM_BATCH][1] = res[(i-ini)*NUM_BATCH+j][1];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+           res[(i-ini)*NUM_BATCH+j][1] = p2;
+       } else if (j == 0){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+           p1 = res[(i-ini)*NUM_BATCH+j][0];
+           p2 = res[(i-ini)*NUM_BATCH+j][1];
+       } else {
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+           n1= res[(i-ini)*NUM_BATCH+j][0];
+           n2 = res[(i-ini)*NUM_BATCH+j][1];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+           res[(i-ini)*NUM_BATCH+j][1] = p2;
+           p1 = n1;
+           p2 = n2;
+
+       }
+
+      }
+
+    }
+
+    return res;
+}
+
+
+ f4si *permute3(f4si* arr, int dd, int ini, int fi)
+{
+
+    int k, j, i;
+    float n1, p1;
+    float n2, p2;
+    float n3, p3;
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+       if (j == NUM_BATCH-1){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j], 29,30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28);
+           res[(i-ini)*NUM_BATCH][0] = res[(i-ini)*NUM_BATCH+j][0];
+           res[(i-ini)*NUM_BATCH][1] = res[(i-ini)*NUM_BATCH+j][1];
+           res[(i-ini)*NUM_BATCH][2] = res[(i-ini)*NUM_BATCH+j][2];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+           res[(i-ini)*NUM_BATCH+j][1] = p2;
+           res[(i-ini)*NUM_BATCH+j][2] = p3;
+       } else if (j == 0){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j], 29,30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28);
+           p1 = res[(i-ini)*NUM_BATCH+j][0];
+           p2 = res[(i-ini)*NUM_BATCH+j][1];
+           p3 = res[(i-ini)*NUM_BATCH+j][2];
+       } else {
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j], 29,30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28);
+           n1= res[(i-ini)*NUM_BATCH+j][0];
+           n2 = res[(i-ini)*NUM_BATCH+j][1];
+           n3 = res[(i-ini)*NUM_BATCH+j][2];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+           res[(i-ini)*NUM_BATCH+j][1] = p2;
+           res[(i-ini)*NUM_BATCH+j][2] = p3;
+           p1 = n1;
+           p2 = n2;
+           p3 = n3;
+       }
+
+      }
+
+    }
+
+    return res;
+}
+
+ f4si *permute0(f4si* arr, int dd, int ini, int fi)
+{
+
+    int k, j, i;
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+            res[(i-ini)*NUM_BATCH+j] = arr[i*NUM_BATCH+j];
+      }
+
+    }
+
+    return res;
+}
+
+ f4si *bind_aux(f4si *a, f4si *b, int n){
+    int i, j;
+    f4si *enc = (f4si *)calloc(DIMENSIONS * n, sizeof(int));
+    for(i = 0; i < n; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+             enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[(NUM_BATCH * i) + j];
         }
-        
-        f4si *multiset_aux(f4si *a, int n){
-            int i, j;
-            for(i = 1; i < n; i++){
-                for(j = 0; j < NUM_BATCH; ++j){
-                    a[j] += a[(NUM_BATCH * i) + j];
-                }
-            }
-            return a;
+    }
+    free(b);
+    free(a);
+    return enc;
+}
+
+f4si* multiset_aux(f4si *a, int n, f4si* res){
+    int i, j;
+    for(i = 0; i < n; i++){
+        for(j = 0; j < NUM_BATCH; ++j){
+            res[j] += a[(NUM_BATCH * i) + j];
         }
-        
-        
-        f4si* ngram(f4si* arr, int n){
-            int i, j,k,a;
-            f4si * res = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
-            f4si * sample = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
-        
-            res = permute(arr,n-1,0,INPUT_DIM-(n-1));
-            for (i = 1; i < n; i++){
-                sample = permute(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
-                res = bind_aux(res,sample,INPUT_DIM-(n-1));
+    }
+    return res;
+}
+
+f4si *forward(f4si *a, float* indices, f4si* enc){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            if (indices[i] != padding){
+                enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
             }
-            return multiset_aux(res,INPUT_DIM-(n-1));
         }
+    }
+    return enc;
+}
+
+
+f4si* ngram(f4si* arr, int n){
+    int i, j,k,a;
+    f4si * res = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
+    f4si * sample = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
+
+    res = permute2(arr,n-1,0,INPUT_DIM-(n-1));
+    for (i = 1; i < n; i++){
+        if (n-i-1 == 1){
+            sample = permute1(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
+        } else if (n-i-1 == 2){
+            sample = permute2(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
+        } else if (n-i-1 == 3){
+            sample = permute3(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
+        } else {
+            sample = permute0(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
+        }
+
+        res = bind_aux(res,sample,INPUT_DIM-(n-1));
+    }
+    free(arr);
+    return multiset_aux(res,INPUT_DIM-(n-1), res);
+}
                 '''
             )
 
@@ -1466,4 +1630,562 @@ f4si *permute_forward(f4si* arr, int dd, int ini, int fi)
     return res;
 }
 
+            '''
+
+
+
+
+
+
+
+
+
+
+
+            '''
+                  
+        f4si* ngram(f4si* arr, int n){
+            int i, j,k,a;
+            f4si * res = calloc(DIMENSIONS*(SYMBOLS_DIM-(n-1)), sizeof(int));
+            f4si * sample = calloc(DIMENSIONS*(SYMBOLS_DIM-(n-1)), sizeof(int));
+
+            res = permute(arr,n-1,0,SYMBOLS_DIM-(n-1));
+            for (i = 1; i < n; i++){
+                sample = permute(arr,n-i-1,i,SYMBOLS_DIM-(n-1)+i);
+                res = bind_aux(res,sample,SYMBOLS_DIM-(n-1));
+            }
+            return multiset_aux(res,SYMBOLS_DIM-(n-1));
+        }
+
+
+   f4si *forward(f4si *a, float* indices, f4si* enc){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
+        }
+    }
+    return enc;
+}
+
+void encode_train_task(void* task){
+    float* data = ((struct Task*)task) -> data;
+    int label = ((struct Task*)task) -> label;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    map_range_clamp_one(data,SYMBOLS_DIM-1, indices);
+    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    enc = forward(SYMBOLS,indices,enc);
+    enc = ngram(enc,3);
+    hard_quantize((float*)enc,1);
+    update_weight((float*)enc,label);
+    //free(enc);
+    //free(indices);
+    //free(data);
+}
+
+            
+            '''
+
+
+
+            '''
+ f4si *permute1(f4si* arr, int dd, int ini, int fi)
+ {
+
+    int k, j, i;
+    float n1, p1;
+    float n2, p2;
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+       if (j == NUM_BATCH-1){
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+           res[i*NUM_BATCH][0] = res[i*NUM_BATCH+j][0];
+           res[i*NUM_BATCH+j][0] = p1;
+       } else if (j == 0){
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+           p1 = res[i*NUM_BATCH+j][0];
+       } else {
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+           n1= res[i*NUM_BATCH+j][0];
+           res[i*NUM_BATCH+j][0] = p1;
+           p1 = n1;
+       }
+
+      }
+
+    }
+
+    return res;
+}
+
+ f4si *permute2(f4si* arr, int dd, int ini, int fi)
+{
+
+    int k, j, i;
+    float n1, p1;
+    float n2, p2;
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+       if (j == NUM_BATCH-1){
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+           res[i*NUM_BATCH][0] = res[i*NUM_BATCH+j][0];
+           res[i*NUM_BATCH][1] = res[i*NUM_BATCH+j][1];
+           res[i*NUM_BATCH+j][0] = p1;
+           res[i*NUM_BATCH+j][1] = p2;
+       } else if (j == 0){
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+           p1 = res[i*NUM_BATCH+j][0];
+           p2 = res[i*NUM_BATCH+j][1];
+       } else {
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+           n1= res[i*NUM_BATCH+j][0];
+           n2 = res[i*NUM_BATCH+j][1];
+           res[i*NUM_BATCH+j][0] = p1;
+           res[i*NUM_BATCH+j][1] = p2;
+           p1 = n1;
+           p2 = n2;
+
+       }
+
+      }
+
+    }
+
+    return res;
+}
+
+
+ f4si *permute3(f4si* arr, int dd, int ini, int fi)
+{
+
+    int k, j, i;
+    float n1, p1;
+    float n2, p2;
+    float n3, p3;
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+       if (j == NUM_BATCH-1){
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j], 29,30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28);
+           res[i*NUM_BATCH][0] = res[i*NUM_BATCH+j][0];
+           res[i*NUM_BATCH][1] = res[i*NUM_BATCH+j][1];
+           res[i*NUM_BATCH][2] = res[i*NUM_BATCH+j][2];
+           res[i*NUM_BATCH+j][0] = p1;
+           res[i*NUM_BATCH+j][1] = p2;
+           res[i*NUM_BATCH+j][2] = p3;
+       } else if (j == 0){
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j], 29,30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28);
+           p1 = res[i*NUM_BATCH+j][0];
+           p2 = res[i*NUM_BATCH+j][1];
+           p3 = res[i*NUM_BATCH+j][2];
+       } else {
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j], 29,30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28);
+           n1= res[i*NUM_BATCH+j][0];
+           n2 = res[i*NUM_BATCH+j][1];
+           n3 = res[i*NUM_BATCH+j][2];
+           res[i*NUM_BATCH+j][0] = p1;
+           res[i*NUM_BATCH+j][1] = p2;
+           res[i*NUM_BATCH+j][2] = p3;
+           p1 = n1;
+           p2 = n2;
+           p3 = n3;
+       }
+
+      }
+
+    }
+
+    return res;
+}
+
+ f4si *bind_aux(f4si *a, f4si *b, int n){
+    int i, j;
+    f4si *enc = (f4si *)calloc(DIMENSIONS * n, sizeof(int));
+    for(i = 0; i < n; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+             enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[(NUM_BATCH * i) + j];
+        }
+    }
+    free(b);
+    free(a);
+    return enc;
+}
+
+f4si* multiset_aux(f4si *a, int n, f4si* res){
+    int i, j;
+    for(i = 0; i < n; i++){
+        for(j = 0; j < NUM_BATCH; ++j){
+            res[j] += a[(NUM_BATCH * i) + j];
+        }
+    }
+    return res;
+}
+
+
+void print_m(f4si* arr, int size){
+   int i, j, k;
+   for (i = 0; i < size; i++){
+      for (j = 0; j < NUM_BATCH; j++){
+         for(k = 0; k < BATCH; k++){
+            printf("%f ",arr[i*NUM_BATCH+j][k]);
+         }
+      }
+      printf("\n");
+   }
+}
+f4si *forward(f4si *a, float* indices, f4si* enc){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
+        }
+    }
+    return enc;
+}
+
+
+f4si* ngram(f4si* arr, int n){
+    int i, j,k,a;
+    f4si * res = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
+    f4si * sample = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
+
+    res = permute(arr,n-1,0,INPUT_DIM-(n-1));
+    for (i = 1; i < n; i++){
+        sample = permute(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
+        res = bind_aux(res,sample,INPUT_DIM-(n-1));
+    }
+    free(arr);
+    return multiset_aux(res,INPUT_DIM-(n-1), res);
+}
+void encode_train_task(void* task){
+    float* data = ((struct Task*)task) -> data;
+    int label = ((struct Task*)task) -> label;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    map_range_clamp_one(data,SYMBOLS_DIM-1, indices);
+    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    enc = forward(SYMBOLS,indices,enc);
+    enc = ngram(enc,3);
+    hard_quantize((float*)enc,1);
+    update_weight((float*)enc,label);
+    free(enc);
+    free(indices);
+    free(data);
+}
+
+
+void encode_test_task(void* task){
+    float* data = ((struct Task*)task) -> data;
+    int label = ((struct Task*)task) -> label;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    map_range_clamp_one(data,SYMBOLS_DIM-1, indices);
+    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    enc = forward(SYMBOLS,indices,enc);
+
+    enc = ngram(enc,3);
+    float *l = linear((float*)enc);
+    if(argmax(l) == label){
+        free(l);
+        update_correct_predictions();
+    }
+    free(indices);
+    free(data);
+    free(enc);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+                
+f4si *permute1(f4si* arr, int dd, int ini, int fi)
+ {
+
+    int k, j, i;
+    float n1, p1;
+    float n2, p2;
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+       if (j == NUM_BATCH-1){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+           res[(i-ini)*NUM_BATCH][0] = res[(i-ini)*NUM_BATCH+j][0];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+       } else if (j == 0){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+           p1 = res[(i-ini)*NUM_BATCH+j][0];
+       } else {
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+           n1= res[(i-ini)*NUM_BATCH+j][0];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+           p1 = n1;
+       }
+
+      }
+
+    }
+
+    return res;
+}
+
+ f4si *permute2(f4si* arr, int dd, int ini, int fi)
+{
+
+    int k, j, i;
+    float n1, p1;
+    float n2, p2;
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+       if (j == NUM_BATCH-1){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+           res[(i-ini)*NUM_BATCH][0] = res[(i-ini)*NUM_BATCH+j][0];
+           res[(i-ini)*NUM_BATCH][1] = res[(i-ini)*NUM_BATCH+j][1];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+           res[(i-ini)*NUM_BATCH+j][1] = p2;
+       } else if (j == 0){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+           p1 = res[(i-ini)*NUM_BATCH+j][0];
+           p2 = res[(i-ini)*NUM_BATCH+j][1];
+       } else {
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+           n1= res[(i-ini)*NUM_BATCH+j][0];
+           n2 = res[(i-ini)*NUM_BATCH+j][1];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+           res[(i-ini)*NUM_BATCH+j][1] = p2;
+           p1 = n1;
+           p2 = n2;
+
+       }
+
+      }
+
+    }
+
+    return res;
+}
+
+
+ f4si *permute3(f4si* arr, int dd, int ini, int fi)
+{
+
+    int k, j, i;
+    float n1, p1;
+    float n2, p2;
+    float n3, p3;
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+       if (j == NUM_BATCH-1){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j], 29,30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28);
+           res[(i-ini)*NUM_BATCH][0] = res[(i-ini)*NUM_BATCH+j][0];
+           res[(i-ini)*NUM_BATCH][1] = res[(i-ini)*NUM_BATCH+j][1];
+           res[(i-ini)*NUM_BATCH][2] = res[(i-ini)*NUM_BATCH+j][2];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+           res[(i-ini)*NUM_BATCH+j][1] = p2;
+           res[(i-ini)*NUM_BATCH+j][2] = p3;
+       } else if (j == 0){
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j], 29,30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28);
+           p1 = res[(i-ini)*NUM_BATCH+j][0];
+           p2 = res[(i-ini)*NUM_BATCH+j][1];
+           p3 = res[(i-ini)*NUM_BATCH+j][2];
+       } else {
+           res[(i-ini)*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j], 29,30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28);
+           n1= res[(i-ini)*NUM_BATCH+j][0];
+           n2 = res[(i-ini)*NUM_BATCH+j][1];
+           n3 = res[(i-ini)*NUM_BATCH+j][2];
+           res[(i-ini)*NUM_BATCH+j][0] = p1;
+           res[(i-ini)*NUM_BATCH+j][1] = p2;
+           res[(i-ini)*NUM_BATCH+j][2] = p3;
+           p1 = n1;
+           p2 = n2;
+           p3 = n3;
+       }
+
+      }
+
+    }
+
+    return res;
+}
+
+ f4si *permute0(f4si* arr, int dd, int ini, int fi)
+{
+
+    int k, j, i;
+
+    f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+            res[(i-ini)*NUM_BATCH+j] = arr[i*NUM_BATCH+j];
+      }
+
+    }
+
+    return res;
+}
+
+ f4si *bind_aux(f4si *a, f4si *b, int n){
+    int i, j;
+    f4si *enc = (f4si *)calloc(DIMENSIONS * n, sizeof(int));
+    for(i = 0; i < n; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+             enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[(NUM_BATCH * i) + j];
+        }
+    }
+    free(b);
+    free(a);
+    return enc;
+}
+
+f4si* multiset_aux(f4si *a, int n, f4si* res){
+    int i, j;
+    for(i = 0; i < n; i++){
+        for(j = 0; j < NUM_BATCH; ++j){
+            res[j] += a[(NUM_BATCH * i) + j];
+        }
+    }
+    return res;
+}
+
+
+void print_m(f4si* arr, int size){
+   int i, j, k;
+   for (i = 0; i < size; i++){
+      for (j = 0; j < NUM_BATCH; j++){
+         for(k = 0; k < BATCH; k++){
+            printf("%f ",arr[i*NUM_BATCH+j][k]);
+         }
+      }
+      printf("\n");
+   }
+}
+f4si *forward(f4si *a, float* indices, f4si* enc){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            if (indices[i] != 0.0){
+                enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
+            }
+        }
+    }
+    return enc;
+}
+
+
+f4si* ngram(f4si* arr, int n){
+    int i, j,k,a;
+    f4si * res = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
+    f4si * sample = calloc(DIMENSIONS*(INPUT_DIM-(n-1)), sizeof(int));
+
+    res = permute2(arr,n-1,0,INPUT_DIM-(n-1));
+    for (i = 1; i < n; i++){
+        if (n-i-1 == 1){
+            sample = permute1(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
+        } else if (n-i-1 == 2){
+            sample = permute2(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
+        } else if (n-i-1 == 3){
+            sample = permute3(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
+        } else {
+            sample = permute0(arr,n-i-1,i,INPUT_DIM-(n-1)+i);
+        }
+
+        res = bind_aux(res,sample,INPUT_DIM-(n-1));
+    }
+    free(arr);
+    return multiset_aux(res,INPUT_DIM-(n-1), res);
+}
+
+void encode_train_task(void* task){
+    float* data = ((struct Task*)task) -> data;
+    int label = ((struct Task*)task) -> label;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    map_range_clamp_one(data,SYMBOLS_DIM-1, indices);
+    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    enc = forward(SYMBOLS,indices,enc);
+    enc = ngram(enc,3);
+    hard_quantize((float*)enc,1);
+    update_weight((float*)enc,label);
+    free(enc);
+    free(indices);
+    free(data);
+}
+
+
+void encode_test_task(void* task){
+    float* data = ((struct Task*)task) -> data;
+    int label = ((struct Task*)task) -> label;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    map_range_clamp_one(data,SYMBOLS_DIM-1, indices);
+    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    enc = forward(SYMBOLS,indices,enc);
+
+    enc = ngram(enc,3);
+    float *l = linear((float*)enc);
+    if(argmax(l) == label){
+        free(l);
+        update_correct_predictions();
+    }
+    free(indices);
+    free(data);
+    free(enc);
+}
+void train_loop(){
+    int i;
+    for(i = 0; i < TRAIN; i++){
+        struct Task *task = (struct Task *)calloc(1,sizeof(struct Task));
+        task -> data = load_data_next_line(train_data);
+        task -> label = load_labels_next_line(train_labels);
+        mt_add_job(pool, &encode_train_task, task);
+    }
+    mt_join(pool);
+    normalize();
+}
+
+float test_loop(){
+    int i;
+    for(i = 0; i < TEST; i++){
+        struct Task *task = (struct Task *)calloc(1,sizeof(struct Task));
+        task -> data = load_data_next_line(test_data);
+        task -> label = load_labels_next_line(test_labels);
+        mt_add_job(pool, &encode_test_task, task);
+    }
+    mt_join(pool);
+    return CORRECT_PREDICTIONS/(float)TEST;
+}
+
+int main(int argc, char **argv) {
+
+    SYMBOLS = random_hv(SYMBOLS_DIM);
+	pool = mt_create_pool(NUM_THREADS);
+    weights();
+    prepare_to_load_data(argv);
+
+    struct timespec begin, end;
+    double elapsed;
+    clock_gettime(CLOCK_MONOTONIC, &begin);
+
+    train_loop();
+    float acc = test_loop();
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = end.tv_sec - begin.tv_sec;
+    elapsed += (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
+    printf("lang,%d,%f,%f", DIMENSIONS,elapsed, acc);
+
+}
             '''

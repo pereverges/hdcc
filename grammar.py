@@ -94,23 +94,14 @@ def p_parallel_memory_efficient(p):
     '''type : PARALLEL_MEMORY_EFFICIENT'''
     p[0] = p[1]
 
-def p_memory_batch(p):
-    '''directive : MEMORY_BATCH NUMBER'''
-    p[0] = astDirective(action='MEMORY_BATCH', params=[p.lineno(1), p[2]])
-
 def p_embeddings_list(p):
     '''embeddings : embedding_list '''
     p[0] = p[1]
 
 def p_weight_embed(p):
-    '''directive : WEIGHT_EMBED LCLAU ID embedding_type NUMBER RCLAU '''
+    '''directive : WEIGHT_EMBED LPAREN ID embedding_type NUMBER RPAREN '''
     p[0] = astDirective(action='WEIGHT_EMBED', params=[p.lineno(1), p[3], p[4], p[5]])
 
-'''
-def p_value_and_embedding_list(p):
-    'value_embedding : embedding_list weight embedding_list'
-    p[0] = p[1] + [p[2]] + p[3]
-'''
 
 def p_embedding_list_none(p):
     'embedding_list : '
@@ -123,14 +114,23 @@ def p_embedding_list_some(p):
 
 
 def p_weight(p):
-    '''embedding_param : LSBRAQ ID embedding_type NUMBER RSBRAQ'''
+    '''embedding_param : LPAREN ID embedding_type NUMBER RPAREN'''
     p[0] = p.lineno(1), p[2].upper(), p[3], p[4]
 
 
 def p_embedding_type(p):
-    '''embedding_type : RANDOM
+    '''embedding_type : random
+                      | random_padding
                       | level '''
     p[0] = p[1]
+
+def p_random(p):
+    '''random : RANDOM '''
+    p[0] = p[1]
+
+def p_random_padding(p):
+    '''random_padding : RANDOM_PADDING NUMBER'''
+    p[0] = [p[1], p[2]]
 
 def p_level(p):
     '''level : LEVEL NUMBER'''
@@ -156,8 +156,6 @@ def p_test_size_directive(p):
     p[0] = astDirective(action='TEST_SIZE', params=[p.lineno(1), p[2]])
 
 
-
-
 def p_vector_size_directive(p):
     '''directive : VECTOR_SIZE NUMBER '''
     p[0] = astDirective(action='VECTOR_SIZE', params=[p.lineno(1), p[2]])
@@ -179,7 +177,7 @@ def p_var(p):
 
 
 def p_bind(p):
-    '''expression : BIND LPAREN expression COLON expression RPAREN'''
+    '''expression : MULTIBIND LPAREN expression COLON expression RPAREN'''
     p[0] = p.lineno(1), p[1], p[3], p[5]
 
 def p_permute(p):
@@ -190,13 +188,8 @@ def p_ngram(p):
     '''expression : NGRAM LPAREN expression COLON NUMBER RPAREN'''
     p[0] = p.lineno(1), p[1], p[3], p[5]
 
-def p_bundle(p):
-    """expression : BUNDLE LPAREN expression COLON expression RPAREN"""
-    p[0] = p.lineno(1), p[1], p[3], p[5]
-
-
 def p_multiset(p):
-    """expression : MULTISET LPAREN expression RPAREN"""
+    """expression : MULTIBUNDLE LPAREN expression RPAREN"""
     p[0] = p.lineno(1), p[1], p[3]
 
 

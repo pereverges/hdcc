@@ -23,13 +23,15 @@ class hdccAST:
         self.num_threads = None
         self.type = None
         self.vector_size = 128
-        self.memory_batch = 200
         self.high = 0
         self.basic = True
+        self.padding = None
         self.required_arguments = {'NAME', 'ENCODING', 'CLASSES', 'DIMENSIONS', 'TEST_SIZE', 'TRAIN_SIZE', 'TYPE', 'INPUT_DIM'}
 
     def get_ast_obj(self):
-        return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, self.encoding_fun, self.train_size, self.test_size, self.num_threads, self.vector_size, self.type, self.memory_batch, self.input, self.input_dim, self.high, self.basic
+        return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, \
+               self.encoding_fun, self.train_size, self.test_size, self.num_threads, self.vector_size, self.type,\
+               self.input, self.input_dim, self.high, self.basic, self.padding
 
     def validateDirective(self, x):
         action, params = self.astDirective.resolve(x)
@@ -46,15 +48,18 @@ class hdccAST:
                 self.encoding_build(self.encoding, self.encoding)
             else:
                 self.wait = params[1]
-            # print('Resulting encoding', encoding)
         if action == 'EMBEDDING':
             self.set_declared_vars(params)
-            # print(self.declared_vars)
         if action == 'WEIGHT_EMBED':
             self.declared_vars.add(params[1])
             self.weight = params[1]
             if isinstance(params[2], list):
-                self.embeddings.append([params[2][0], params[1], params[2][1]])
+                if params[2][0] == 'LEVEL':
+                    self.embeddings.append([params[2][0], params[1], params[2][1]])
+                else:
+                    self.embeddings.append([params[2][0], params[1], params[2][1]])
+                    # TODO CHANGE EMBEDDING TO OBJECT AND STORE THIS VARS
+                    self.padding = params[3]
                 self.high = params[3]
             else:
                 self.embeddings.append([params[2], params[1], params[3]])
@@ -91,62 +96,14 @@ class hdccAST:
                 self.type = Types.PARALLEL
             elif params[1] == 'PARALLEL_MEMORY_EFFICIENT':
                 self.type = Types.PARALLEL_MEMORY_EFFICIENT
-        if action == 'MEMORY_BATCH':
-            self.memory_batch = params[1]
         if action == 'INPUT_DIM':
             self.input_dim = params[1]
         if action == 'MODE':
             self.basic = params[1]
 
     def unpack_encoding(self, i, enc):
-        '''
-        if i[1] == 'BIND':
-            self.multibind = True
-            if self.unpack_encoding(i[2])[1] not in self.used_vars:
-                # return 'bind(' + self.unpack_encoding(i[2])[0] + ',' + self.unpack_encoding(i[3])[0] + ',INPUT_DIM' + ')', self.unpack_encoding(i[3])[1] + '(NUM_BATCH * i) + j] * (' + self.unpack_encoding(i[2])[1] + '* NUM_BATCH + j])', 'bind'
-                return 'bind(' + self.unpack_encoding(i[2])[0] + ',' + self.unpack_encoding(i[3])[0] + ',INPUT_DIM' + ')', self.unpack_encoding(i[3])[1] + '* NUM_BATCH + j] * (' + self.unpack_encoding(i[2])[1] + '(NUM_BATCH * i) + j])', 'bind'
-            #return 'bind(' + self.unpack_encoding(i[2])[0] + ',' + self.unpack_encoding(i[3])[0] + ',INPUT_DIM' + ')', self.unpack_encoding(i[2])[1] + ' +(NUM_BATCH * i) + j] * (' + self.unpack_encoding(i[3])[1] + '* NUM_BATCH + j])', 'bind'
-            return 'bind(' + self.unpack_encoding(i[2])[0] + ',' + self.unpack_encoding(i[3])[0] + ',INPUT_DIM' + ')', self.unpack_encoding(i[2])[1] + ' * NUM_BATCH + j] * (' + self.unpack_encoding(i[3])[1] + '+(NUM_BATCH * i) + j])', 'bind'
-        elif i[1] == 'BUNDLE':
-            return 'bundle(' + self.unpack_encoding(i[1][2])[0] + ',' + 'INPUT_DIM' + ')', '', 'bundle'
-        elif i[1] == 'MULTISET':
-            self.multiset = True
-            return 'multiset(' + self.unpack_encoding(i[2])[0] + ',' + 'INPUT_DIM' + ')', self.unpack_encoding(i[2])[1], 'multiset'
-        else:
-            self.set_used_var(i)
-            if i == self.weight:
-                return self.weight, ''+self.weight+'[(int)indices[i]', 'var'
-            return i.upper(), i.upper()+'[', 'var'
-        '''
-        '''
-        f4si * enc = calloc(DIMENSIONS, sizeof(int));
-        enc = bind_forward(CHANNELS, SIGNALS, indices, enc);
-        enc = multiset(enc);
-        enc = permute(enc, 1);
-        '''
-        '''
         if self.basic:
-            if i[1] == 'BIND':
-                self.multibind = True
-                if self.unpack_encoding(i[3])[1] == self.weight:
-                    return 'bind_forward(' + self.unpack_encoding(i[2])[1] + ',' + self.unpack_encoding(i[3])[1] + ',indices' + ')', 'bind_forward(' + self.unpack_encoding(i[2])[1] + ',' + self.unpack_encoding(i[3])[1] + ',indices' + ')', 'bind_forward'
-                else:
-                    return 'bind(' + self.unpack_encoding(i[2])[1] + ',' + self.unpack_encoding(i[3])[1] + '' + ')', 'bind(' + self.unpack_encoding(i[2])[1] + ',' + self.unpack_encoding(i[3])[1] + '' + ')', 'bind'
-            elif i[1] == 'BUNDLE':
-                return 'bundle(' + self.unpack_encoding(i[1][2])[0] + ')', '', 'bundle'
-            elif i[1] == 'PERMUTE':
-                return 'permute(' + self.unpack_encoding(i[2])[0] + ',' + str(i[3]) +')', 'permute(' + self.unpack_encoding(i[2])[0] + ',' + str(i[3]) +')', 'permute'
-            elif i[1] == 'MULTISET':
-                self.multiset = True
-                return 'multiset(' + self.unpack_encoding(i[2])[0] + ')', 'multiset(' + self.unpack_encoding(i[2])[0] + ')', 'multiset'
-            else:
-                self.set_used_var(i)
-                if i == self.weight:
-                    return self.weight, self.weight, 'var'
-                return i.upper(), i.upper(), 'var'
-        '''
-        if self.basic:
-            if i[1] == 'BIND':
+            if i[1] == 'MULTIBIND':
                 self.multibind = True
                 if i[3] == self.weight:
                     b1, enc1, _, _ = self.unpack_encoding(i[2],enc)
@@ -174,11 +131,13 @@ class hdccAST:
                 enc += '\n    enc = permute(' + b + ',' + str(i[3]) + ',0,1);'
                 return 'enc', enc, '', ''
             elif i[1] == 'NGRAM':
+                self.ngram = True
                 b, enc_aux, _, _ = self.unpack_encoding(i[2], enc)
                 enc += enc_aux
-                enc += '\n    enc = ngram(' + b + ',' + str(i[3]) + ');'
+                enc += '\n    enc = forward(' + self.weight + ',indices,enc '+');'
+                enc += '\n    enc = ngram(enc,' + str(i[3]) + ');'
                 return 'enc', enc, '', ''
-            elif i[1] == 'MULTISET':
+            elif i[1] == 'MULTIBUNDLE':
                 self.multiset = True
                 b, enc_aux, fun, varaibles = self.unpack_encoding(i[2], enc)
                 if fun == 'bind':
@@ -201,6 +160,7 @@ class hdccAST:
         self.used_vars.add(var)
 
     def set_declared_vars(self,params):
+
         if type(params[1]) == list:
             for i in params[1]:
                 if i[1] == 'WEIGHT':
@@ -222,7 +182,6 @@ class hdccAST:
                 else:
                     self.declared_vars.add(i[1])
                     if isinstance(i[2], list):
-                        print("heigh", i[3])
                         self.high = i[3]
                         self.embeddings.append([i[2][0], i[1], i[2][1], i[3]])
                     else:
@@ -328,7 +287,7 @@ void encode_train_task(void* task){'''
         fun_head_test = '''
 void encode_test_task(void* task){'''
 
-        if self.basic:
+        if self.basic and not self.ngram:
             #var = '= ' + var + ';'
             self.encoding_fun = fun_head_train + '''
     float* data = ((struct Task*)task) -> data;
@@ -361,97 +320,41 @@ void encode_test_task(void* task){'''
     free(enc);
 }
                             '''
-
         else:
-            if t == 'multiset':
-                var = 'enc[j] += ' + var + ';'
-            else:
-                var = ' enc[(DIMENSIONS*i) + j] = ' + var + ';'
-            if self.multiset and self.multibind:
-                self.encoding_fun = fun_head_train + '''
-    f4si *enc = calloc(DIMENSIONS,sizeof(int));
+            # var = '= ' + var + ';'
+
+            self.encoding_fun = fun_head_train + '''
     float* data = ((struct Task*)task) -> data;
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    int i, j;
-    for(i = 0; i < INPUT_DIM; ++i){
-        for(j = 0; j < NUM_BATCH; j++){
-            ''' + var + '''
-        }
-    }
+    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    ''' + var + '''
     hard_quantize((float*)enc,1);
     update_weight((float*)enc,label);
-    //free(enc);
-    //free(indices);
-    //free(data);
+    free(enc);
+    free(indices);
+    free(data);
 }
 
 ''' + fun_head_test + '''
-    f4si *enc = calloc(DIMENSIONS,sizeof(int));
     float* data = ((struct Task*)task) -> data;
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    int i, j;
-    for(i = 0; i < INPUT_DIM; ++i){
-        for(j = 0; j < NUM_BATCH; j++){
-            ''' + var + '''
-        }
-    }
+    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    ''' + var + '''
     float *l = linear((float*)enc);
-    free(enc);
     if(argmax(l) == label){
         free(l);
         update_correct_predictions();
     }
     free(indices);
     free(data);
+    free(enc);
 }
+
                             '''
-
-            else:
-                self.encoding_fun = fun_head_train + '''
-    int index = ((struct EncodeTaskTrain*)task) -> split_start;
-    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
-    float* data = ((struct EncodeTaskTrain*)task) -> data;
-    int label = ((struct EncodeTaskTrain*)task) -> label;
-    map_range_clamp_one(data,INPUT_DIM-1, indices);
-    f4si *res = calloc(DIMENSIONS*INPUT_DIM,sizeof(int));
-    int i, j;
-    for(i = index; i < SPLIT_SIZE+index; ++i){
-        if (index < INPUT_DIM){
-            for(j = 0; j < NUM_BATCH; j++){
-                ''' + var + '''
-            }
-        }
-    }
-    hard_quantize((float *)res,1);
-    update_weight((float *)res, label);
-    free(res);
-    free(indices);
-}
-
-''' + fun_head_test + '''
-    int index = ((struct EncodeTaskTrain*)task) -> split_start;
-    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
-    float* data = ((struct EncodeTaskTrain*)task) -> data;
-    int label = ((struct EncodeTaskTrain*)task) -> label;
-    map_range_clamp_one(data,INPUT_DIM-1, indices);
-    f4si *res = calloc(DIMENSIONS*INPUT_DIM,sizeof(int));
-    int i, j;
-    for(i = index; i < SPLIT_SIZE+index; ++i){
-        if (index < INPUT_DIM){
-            for(j = 0; j < NUM_BATCH; j++){
-                ''' + var + '''
-            }
-        }
-    }
-    hard_quantize((float *)res,1);
-    update_weight((float *)res, label);
-    free(res);
-    free(indices);
-} '''
 
     def validateRequiredArgs(self):
         for i in self.required_arguments:

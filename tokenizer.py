@@ -3,50 +3,55 @@
 # TOKEN NAMES
 
 reserved = {
+    'NAME',
     'RANDOM',
+    'RANDOM_PADDING',
     'LEVEL',
-    'BIND',
-    'BUNDLE',
-    'MULTISET',
+
+    'WEIGHT_EMBED'
+    'EMBEDDING',
+
+    'MULTIBIND',
+    'MULTIBUNDLE',
+    'PERMUTE',
+    'NGRAM',
+
     'DEBUG',
+
     'TRUE',
     'FALSE',
+
     'SEQUENTIAL',
     'PARALLEL',
     'PARALLEL_MEMORY_EFFICIENT',
-    'PERMUTE',
-    'NGRAM',
-    'WEIGHT_EMBED'
 }
 
 
 tokens = (
     'NAME',
 
+    'RANDOM',
+    'RANDOM_PADDING',
+    'LEVEL',
+
     'WEIGHT_EMBED',
     'EMBEDDING',
-    'ID',
-    'RANDOM',
-    'LEVEL',
-    'NUMBER',
+
+    'MULTIBIND',
+    'MULTIBUNDLE',
+    'PERMUTE',
+    'NGRAM',
+
     'DEBUG',
+    'NUMBER',
+    'ID',
 
     'ENCODING',
     'DIMENSIONS',
     'CLASSES',
 
-    'BIND',
-    'BUNDLE',
-    'MULTISET',
-    'PERMUTE',
-    'NGRAM',
-
     'LPAREN',
     'RPAREN',
-    'LSBRAQ',
-    'RSBRAQ',
-    'LCLAU',
-    'RCLAU',
 
     'SEMICOLON',
     'COLON',
@@ -65,8 +70,6 @@ tokens = (
     'SEQUENTIAL',
     'PARALLEL',
     'PARALLEL_MEMORY_EFFICIENT',
-
-    'MEMORY_BATCH'
 )
 
 # REGULAR EXPRESSIONS ASSIGNED TO EACH TOKEN
@@ -85,13 +88,8 @@ t_LPAREN = r'\('
 t_RPAREN = r'\)'
 t_SEMICOLON = r'\;'
 t_COLON = r'\,'
-t_LSBRAQ = r'\['
-t_RSBRAQ = r'\]'
-t_LCLAU = r'\{'
-t_RCLAU = r'\}'
 t_DIMENSIONS = r'.DIMENSIONS'
 t_ENCODING = r'.ENCODING'
-t_BIND = r'BIND'
 t_CLASSES = r'.CLASSES'
 t_DEBUG = r'.DEBUG'
 t_TRUE = r'TRUE'
@@ -104,7 +102,6 @@ t_INPUT_DIM = r'.INPUT_DIM'
 t_VECTOR_SIZE = r'.VECTOR_SIZE'
 t_NUM_THREADS = r'.NUM_THREADS'
 t_TYPE = r'.TYPE'
-t_MEMORY_BATCH = r'.MEMORY_BATCH'
 
 
 def t_COMMENT(t):
