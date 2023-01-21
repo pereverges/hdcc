@@ -10,8 +10,6 @@ import sys
 from torchhd import functional
 from torchhd import embeddings
 from torchhd.datasets import EMGHandGestures
-from guppy import hpy
-#hp = hpy()
 device = torch.device("cpu")
 #print("Using {} device".format(device))
 
@@ -140,5 +138,3 @@ tracemalloc.reset_peak()
 tracemalloc.stop()
 '''
 
-#mem = hp.heap()
-#print(','+str(mem[len(mem)-1]).split()[-3])

@@ -9,7 +9,6 @@ from torchhd import functional
 from torchhd import embeddings
 from torchhd.datasets.isolet import ISOLET
 import sys
-from guppy import hpy
 #hp = hpy()
 BATCH_SIZE = 1
 DIMENSIONS = int(sys.argv[1])

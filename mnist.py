@@ -8,7 +8,6 @@ import torch
 import time
 import sys
 #from memory_profiler import profile
-from guppy import hpy
 #hp = hpy()
 #@profile
 def main():
