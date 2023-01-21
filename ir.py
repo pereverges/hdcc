@@ -727,6 +727,17 @@ f4si *bind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
 
     def ngram(self):
         """Ngram a set of hypervectors together"""
+        f = ''
+        if self.padding:
+            f = '''            
+            if (indices[i] != padding){
+                enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
+            }
+            '''
+        else:
+            f = '''
+            enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
+            '''
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
@@ -887,9 +898,12 @@ f4si *forward(f4si *a, float* indices, f4si* enc){
     int i, j;
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < NUM_BATCH; j++){
-            if (indices[i] != padding){
-                enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
-            }
+        '''
+                +
+                f
+                +
+        '''
+
         }
     }
     return enc;

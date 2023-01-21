@@ -26,6 +26,7 @@ class hdccAST:
         self.high = 0
         self.basic = True
         self.padding = None
+        self.ngram = False
         self.required_arguments = {'NAME', 'ENCODING', 'CLASSES', 'DIMENSIONS', 'TEST_SIZE', 'TRAIN_SIZE', 'TYPE', 'INPUT_DIM'}
 
     def get_ast_obj(self):

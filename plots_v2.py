@@ -20,9 +20,9 @@ dataset_hdcc_names = [dataset_hdcc[0].Application.unique(), dataset_hdcc[0].Appl
                       dataset_hdcc[0].Application.unique()]
 first = True
 machines = 3
-names = ['ISOLET','MNIST','EMG']
-fig, axs = plt.subplots(3, machines)
-key = ['voicehd','mnist','emgppp']
+names = ['ISOLET','MNIST','EMG','LANGUAGE']
+fig, axs = plt.subplots(3, 4)
+key = ['voicehd','mnist','emgppp','languages']
 for j in range(len(key)):
     for i in range(machines):
         time_hdc = dataset_hdcc[i][:][dataset_hdcc[i].Application == key[j]][["Dimensions", "Application", "Time"]]
