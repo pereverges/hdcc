@@ -78,7 +78,7 @@ class IntermediateRepresentation:
     def makefile_sequential(self):
         doto = '.o'
         with open('Makefile', 'w') as file:
-            file.write('CC=gcc' + '\n')
+            file.write('CC=clang' + '\n')
             file.write('CFLAGS=-I.' + '\n')
             file.write(self.name + ': ' + self.name + doto + '\n')
             file.write('\t$(CC) -o ' + self.name + ' ' + self.name + doto + ' -lm -O3\n')
@@ -86,7 +86,7 @@ class IntermediateRepresentation:
     def makefile_parallel(self):
         dotc = '.c'
         with open('Makefile', 'w') as file:
-            file.write('CC=gcc' + '\n')
+            file.write('CC=clang' + '\n')
             file.write('all: thread_pool.c thread_pool.h ' + self.name + dotc + '\n')
             file.write('\t$(CC) thread_pool.c ' + self.name + dotc + ' -lpthread -lm -O3 -o ' + self.name + '\n')
 
