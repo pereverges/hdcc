@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 folder = 'experiments/'
 # file_hdcc = folder + 'opengpu_num_threads_20_vector_size_hdcc_08_01_2023_00:03:30'
-file_hdcc = folder + 'mac_num_threads_4_vector_size_hdcc_13_01_2023_07:49:22'
+file_hdcc = folder + 'mac_num_threads_4_vector_size_hdcc_21_01_2023_10:11:00'
 file_torchhd = folder + 'mac_torchhd_13_01_2023_13:37:40'
 
 file_torchhd_opengpu = folder + 'opengpu_torchhd_13_01_2023_15:50:42'

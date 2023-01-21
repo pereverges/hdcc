@@ -135,8 +135,8 @@ class hdccAST:
                 self.ngram = True
                 b, enc_aux, _, _ = self.unpack_encoding(i[2], enc)
                 enc += enc_aux
-                enc += '\n    enc = forward(' + self.weight + ',indices,enc '+');'
-                enc += '\n    enc = ngram(enc,' + str(i[3]) + ');'
+                #enc += '\n    enc = forward(' + self.weight + ',indices,enc '+');'
+                enc += '\n    enc = ngram(' + self.weight + ',indices,enc,' + str(i[3]) + ');'
                 return 'enc', enc, '', ''
             elif i[1] == 'MULTIBUNDLE':
                 self.multiset = True
@@ -329,7 +329,7 @@ void encode_test_task(void* task){'''
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));
+    f4si * enc = calloc(DIMENSIONS, sizeof(int));
     ''' + var + '''
     hard_quantize((float*)enc,1);
     update_weight((float*)enc,label);

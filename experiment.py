@@ -13,9 +13,9 @@ folder = 'experiments/'
 out_file = sys.argv[1]
 
 dimensions = [64, 128, 512, 1024, 4096, 10240]
-files = ['languages','emgp','emgpp','emgppp','emgpppp','emgppppp','mnist', 'voicehd']
-train_size = [210032, 368, 345, 338, 333, 235, 60000, 6238]
-test_size = [21000, 158, 148, 145, 143, 101, 10000, 1559]
+files = ['emgp','emgpp','emgppp','emgpppp','emgppppp','mnist', 'voicehd']
+train_size = [368, 345, 338, 333, 235, 60000, 6238]
+test_size = [ 158, 148, 145, 143, 101, 10000, 1559]
 vector_size = 128
 num_threads = 4
 type_exec = 'PARALLEL_MEMORY_EFFICIENT'
