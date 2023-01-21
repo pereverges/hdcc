@@ -728,7 +728,7 @@ f4si *bind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
     def ngram(self):
         """Ngram a set of hypervectors together"""
         f = ''
-        if self.padding:
+        if self.padding is not None:
             f = '''            
             if (indices[i] != padding){
                 enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
@@ -2246,4 +2246,66 @@ f4si *permute0(f4si* arr, int dd, int ini, int fi)
     __builtin_memcpy_inline(res, arr + ini*NUM_BATCH, DIMENSIONS*(fi-ini)*sizeof(int));
     return res;
 }-maltivec
+
+
+
+
+f4si* ngram2(f4si* arr, const int n){
+    int i, j, k;
+    f4si* res = calloc(DIMENSIONS, sizeof(int));
+    f4si aux;
+    f4si actual;
+    float n1, p1;
+    float n2, p2;
+    for (i = 0; i < (INPUT_DIM-(n-1)); ++i){
+        for (k = 0; k < n; ++k){
+            for (j = 0; j < NUM_BATCH; j++){
+                if (k == 0){
+                    if (j == NUM_BATCH-1){
+                       aux = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+                       aux[0] = p1;
+                       aux[1] = p2;
+                   } else if (j == 0){
+                       aux = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+                       p1 = aux[0];
+                       p2 = aux[1];
+                   } else {
+                       aux = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
+                       n1 = aux[0];
+                       n2 = aux[1];
+                       aux[0] = p1;
+                       aux[1] = p2;
+                       p1 = n1;
+                       p2 = n2;
+                    }
+                    actual = aux; // 2 pos
+                } else if (k == n-1){
+                    actual = actual * arr[(i+k)*NUM_BATCH+j];
+                } else {
+                       if (j == NUM_BATCH-1){
+                           aux = __builtin_shufflevector(arr[(i+k)*NUM_BATCH+j],arr[(i+k)*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+                           aux[0] = p1;
+                       } else if (j == 0){
+                           aux = __builtin_shufflevector(arr[(i+k)*NUM_BATCH+j],arr[(i+k)*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+                           p1 = aux[0];
+                       } else {
+                           aux = __builtin_shufflevector(arr[(i+k)*NUM_BATCH+j],arr[(i+k)*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
+                           n1 = aux[0];
+                           aux[0] = p1;
+                           p1 = n1;
+                       }
+                    //res[i*NUM_BATCH+j] = res[(i)*NUM_BATCH+j] * shuffle(arr[(i+k)*NUM_BATCH+j], (n-1-k))
+
+                    actual = aux * actual;
+                }
+                res[j] = res[j] + actual;
+              }
+        }
+    }
+
+    free(arr);
+    //arr = &res;
+
+    return res;
+}
             '''
