@@ -11,7 +11,7 @@ folder = 'experiments/'
 out_file = sys.argv[1]
 
 dimensions = [64, 128, 512, 1024, 4096, 10240]
-files = ['language_recognition','emg', 'voicehd', 'mnist']
+files = ['languages','emg', 'voicehd', 'mnist']
 patients = ['0','1','2','3','4']
 repetitions = 1
 

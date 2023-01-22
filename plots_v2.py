@@ -4,23 +4,25 @@ import matplotlib.pyplot as plt
 folder = 'experiments/'
 # file_hdcc = folder + 'opengpu_num_threads_20_vector_size_hdcc_08_01_2023_00:03:30'
 file_hdcc = folder + 'mac_num_threads_4_vector_size_hdcc_21_01_2023_10:11:00'
-file_torchhd = folder + 'mac_torchhd_13_01_2023_13:37:40'
+file_torchhd = folder + 'mac_torchhd_21_01_2023_10:16:09'
 
 file_torchhd_opengpu = folder + 'opengpu_torchhd_13_01_2023_15:50:42'
 file_hdcc_opengpu = folder + 'opengpu_num_threads_20_vector_size_hdcc_13_01_2023_15:02:23'
 
-file_torchhd_openlab = folder + 'openlab_torchhd_13_01_2023_17:30:49'
-file_hdcc_openlab = folder + 'openlab_num_threads_20_vector_size_hdcc_13_01_2023_15:42:08'
+file_hdcc_openlab = folder + 'openlab_num_threads_20_vector_size_hdcc_21_01_2023_10:46:58'
+file_torchhd_openlab = folder + 'openlab_torchhd_21_01_2023_11:05:57'
+
+file_hdcc_ubuntu = folder + 'ubuntu_num_threads_4_vector_size_hdcc_21_01_2023_19:53:38'
+file_torchhd_ubuntu = folder + 'ubuntu_torchhd_21_01_2023_20:13:18'
 # file_torchhd = folder + 'opengpu_torchhd_08_01_2023_07:21:50'
 
-machines_names = ['ARM','Intel1','Intel2']
-dataset_hdcc = [pd.read_csv(file_hdcc), pd.read_csv(file_hdcc_openlab), pd.read_csv(file_hdcc_opengpu)]
-dataset_torchhd = [pd.read_csv(file_torchhd), pd.read_csv(file_torchhd_openlab), pd.read_csv(file_torchhd_opengpu)]
-dataset_hdcc_names = [dataset_hdcc[0].Application.unique(), dataset_hdcc[0].Application.unique(),
-                      dataset_hdcc[0].Application.unique()]
+machines_names = ['ARM','Intel1','Intel2','Intel3']
+dataset_hdcc = [pd.read_csv(file_hdcc), pd.read_csv(file_hdcc_openlab), pd.read_csv(file_hdcc_opengpu), pd.read_csv(file_hdcc_ubuntu)]
+dataset_torchhd = [pd.read_csv(file_torchhd), pd.read_csv(file_torchhd_openlab), pd.read_csv(file_torchhd_opengpu), pd.read_csv(file_torchhd_ubuntu)]
+
 first = True
-machines = 3
-names = ['ISOLET','MNIST','EMG','LANGUAGE']
+machines = 4
+names = ['Isolet','Mnist','Emg','Lang recognition']
 fig, axs = plt.subplots(3, 4)
 key = ['voicehd','mnist','emgppp','languages']
 for j in range(len(key)):
@@ -49,15 +51,15 @@ for j in range(len(key)):
         axs[2, j].plot(accuracy_hdc['Dimensions'], memory_hdc['Memory'], label='HDCC '+machines_names[i])
         axs[2, j].plot(accuracy_torchhd['Dimensions'], memory_torchhd['Memory'], label='TorchHD '+machines_names[i])
 
-    axs[0, j].set_title(label='Time '+names[j])
+    axs[0, j].set_title(label=names[j]+'\n\nTime')
     axs[0, j].set_xlabel('Dimensions')
     axs[0, j].set_ylabel('Time (s)')
 
-    axs[1, j].set_title(label='Accuracy '+names[j])
+    axs[1, j].set_title(label='Accuracy')
     axs[1, j].set_xlabel('Dimensions')
     axs[1, j].set_ylabel('Accuracy')
 
-    axs[2, j].set_title(label='Peak memory '+names[j])
+    axs[2, j].set_title(label='Peak memory')
     axs[2, j].set_xlabel('Dimensions')
     axs[2, j].set_ylabel('Memory (bytes)')
 
