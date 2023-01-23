@@ -6,7 +6,7 @@ from collections import deque
 from subprocess import Popen, PIPE
 
 now = '_torchhd_' + datetime.now().strftime("%d_%m_%Y_%H:%M:%S")
-folder = '../experiments/'
+folder = '../results/'
 
 out_file = sys.argv[1]
 

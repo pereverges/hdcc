@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-folder = 'experiments/'
+folder = 'results/'
 # file_hdcc = folder + 'opengpu_num_threads_20_vector_size_hdcc_08_01_2023_00:03:30'
 file_hdcc = folder + 'mac_num_threads_4_vector_size_hdcc_21_01_2023_10:11:00'
 file_torchhd = folder + 'mac_torchhd_21_01_2023_10:16:09'
