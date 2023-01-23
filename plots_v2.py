@@ -6,8 +6,8 @@ folder = 'experiments/'
 file_hdcc = folder + 'mac_num_threads_4_vector_size_hdcc_21_01_2023_10:11:00'
 file_torchhd = folder + 'mac_torchhd_21_01_2023_10:16:09'
 
-file_torchhd_opengpu = folder + 'opengpu_torchhd_13_01_2023_15:50:42'
-file_hdcc_opengpu = folder + 'opengpu_num_threads_20_vector_size_hdcc_13_01_2023_15:02:23'
+file_torchhd_opengpu = folder + 'opengpu_torchhd_22_01_2023_09:42:05'
+file_hdcc_opengpu = folder + 'opengpu_num_threads_20_vector_size_hdcc_21_01_2023_22:39:18'
 
 file_hdcc_openlab = folder + 'openlab_num_threads_20_vector_size_hdcc_21_01_2023_10:46:58'
 file_torchhd_openlab = folder + 'openlab_torchhd_21_01_2023_11:05:57'
