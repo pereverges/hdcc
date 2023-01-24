@@ -13,7 +13,7 @@ out_file = sys.argv[1]
 dimensions = [64, 128, 512, 1024, 4096, 10240]
 files = ['languages','emg', 'voicehd', 'mnist']
 patients = ['0','1','2','3','4']
-repetitions = 1
+repetitions = 5
 
 with open(folder + out_file + now, "a") as output:
     output.write('Application,Dimensions,Time,Accuracy,Memory\n')

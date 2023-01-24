@@ -19,7 +19,7 @@ test_size = [21000, 158, 148, 145, 143, 101, 10000, 1559]
 vector_size = 128
 num_threads = 4
 type_exec = 'PARALLEL'
-repetitions = 1
+repetitions = 5
 
 position = 58
 ti = '-v'

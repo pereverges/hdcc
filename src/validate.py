@@ -27,7 +27,6 @@ class hdccAST:
         self.high = 0
         self.padding = None
 
-        self.not_multiset = False
 
         self.basic = True
         self.multiset = False
@@ -38,7 +37,7 @@ class hdccAST:
     def get_ast_obj(self):
         return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, \
                self.encoding_fun, self.train_size, self.test_size, self.num_threads, self.vector_size, self.type,\
-               self.input_dim, self.high, self.basic, self.padding, self.permutes, self.ngram, self.not_multiset
+               self.input_dim, self.high, self.basic, self.padding, self.permutes, self.ngram, self.multiset
 
     def validateDirective(self, x):
         action, params = self.astDirective.resolve(x)
@@ -113,14 +112,12 @@ class hdccAST:
             if i[1] == 'MULTIBIND':
                 self.multibind = True
                 if i[3] == self.weight:
-                    self.not_multiset = True
                     b1, enc1, _, _ = self.unpack_encoding(i[2],enc)
                     b2, enc2, _, _ = self.unpack_encoding(i[3],enc)
                     enc += enc1 + enc2
                     enc += '\n    enc = multibind_forward(' + b1 + ',' + b2 + ', indices, enc' + ');'
                     return 'enc', enc, 'bind_forward', [b1,b2]
                 elif i[2] == self.weight:
-                    self.not_multiset = True
                     b1, enc1, _, _ = self.unpack_encoding(i[2], enc)
                     b2, enc2, _, _ = self.unpack_encoding(i[3], enc)
                     enc += enc1 + enc2
@@ -150,6 +147,7 @@ class hdccAST:
                 else:
                     self.ngram = i[3]
                 if i[2] == self.weight:
+                    self.multiset = True
                     enc += '\n    enc = ngram_forward(' + i[2] + ',indices,enc,' + str(i[3]) + ');'
                 else:
                     enc += '\n    enc = ngram(' + i[2] + ',enc,' + str(i[3]) + ');'
@@ -240,7 +238,7 @@ void* encode_function(float* indices){'''
 
     def encoding_build_parallel(self, var):
         space = 'DIMENSIONS'
-        if self.not_multiset:
+        if self.multiset == False:
             space += '*INPUT_DIM'
         fun_head_train = '''
 void encode_train_task(void* task){'''
