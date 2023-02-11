@@ -42,7 +42,7 @@ class IntermediateRepresentation:
     def run(self):
         if self.type == Types.SEQUENTIAL:
             irSec = SequentialRepresentation(self.name, self.classes, self.dimensions, self.vars, self.weight_var, self.encoding, self.embeddings, self.debug, self.encoding_fun,
-                 self.train_size, self.test_size, self.num_threads, self.vector_size, self.type, self.input_dim, self.high, self.basic, self.padding)
+                 self.train_size, self.test_size, self.num_threads, self.vector_size, self.type, self.input_dim, self.high, self.basic, self.padding, self.ngram, self.permutes)
             irSec.run_sequential()
         elif self.type == Types.PARALLEL:
             irPar = ParallelRepresentation(self.name, self.classes, self.dimensions, self.vars, self.weight_var,

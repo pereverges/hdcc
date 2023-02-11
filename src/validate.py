@@ -203,38 +203,46 @@ class hdccAST:
             self.encoding_build_parallel(var)
 
     def encoding_build_sequential(self,var,t):
-        if t == 'multiset':
-            var = 'arr[j] += ' + var + ';'
-        else:
-            var = ' arr[(DIMENSIONS*i) + j] = ' + var + ';'
+        space = 'DIMENSIONS'
+        if self.multiset == False:
+            space += '*INPUT_DIM'
+        fun_head_train = '''
+void encode_train_task(void* task){'''
 
-        fun_head = '''
-void* encode_function(float* indices){'''
-        if self.multiset and self.multibind:
-            self.encoding_fun = fun_head + '''
-    int i, j;
-    f4si *arr = calloc(DIMENSIONS, sizeof(int));
-    for(i = 0; i < INPUT_DIM; ++i){
-        for(j = 0; j < NUM_BATCH; j++){
-            ''' + var + '''
-        }
-    }
-    return arr;
-}
-                                '''
+        fun_head_test = '''
+void encode_test_task(void* task){'''
 
-        else:
-            self.encoding_fun = fun_head + '''
-    int i, j;
-    f4si *arr = calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
-    for(i = 0; i < NUM_BATCH; ++i){
-        for(j = 0; j < BATCH; j++){
-            ''' + var + '''
-        }
-    }
-    return arr;
+        self.encoding_fun = fun_head_train + '''
+    float* data = ((struct Task*)task) -> data;
+    int label = ((struct Task*)task) -> label;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
+    f4si * enc = calloc(''' + space + ''', sizeof(int));
+    ''' + var + '''
+    hard_quantize((float*)enc,1);
+    update_weight((float*)enc,label);
+    free(enc);
+    free(indices);
+    free(data);
 }
-                        '''
+
+        ''' + fun_head_test + '''
+    float* data = ((struct Task*)task) -> data;
+    int label = ((struct Task*)task) -> label;
+    float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
+    map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
+    f4si * enc = calloc(''' + space + ''', sizeof(int));
+    ''' + var + '''
+    float *l = linear((float*)enc);
+    if(argmax(l) == label){
+        free(l);
+        update_correct_predictions();
+    }
+    free(indices);
+    free(data);
+    free(enc);
+}
+                                    '''
 
     def encoding_build_parallel(self, var):
         space = 'DIMENSIONS'

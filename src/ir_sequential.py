@@ -1,6 +1,36 @@
+import math
+
+def generate(length, shift):
+    s = ''
+    length = int(length)
+    for i in range(length):
+        if i < shift:
+            s += ',' + str(length - shift + i)
+        else:
+            s += ',' + str((i - shift))
+    return s
+
+
+def generate_shuffle(n, vector_size):
+    sif = ''
+    for i in range(1, n):
+        sif += '''
+    if (d == ''' + str(i) +'''){
+        res = __builtin_shufflevector(arr,arr''' + generate(vector_size / 4, i) + ''');
+        return res;
+    }'''
+    shuffle = '''
+f4si shuffle(f4si arr, int d){
+    f4si res;
+    ''' + sif + '''
+    return res;
+}
+    '''
+    return shuffle
+
 class SequentialRepresentation:
     def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun,
-                 train_size, test_size, num_threads, vector_size, type, input_dim, high, basic, padding):
+                 train_size, test_size, num_threads, vector_size, type, input_dim, high, basic, padding, ngram, permutes):
         self.name = name
         self.basic_name = self.get_basic_name(name)
         self.classes = classes
@@ -20,6 +50,8 @@ class SequentialRepresentation:
         self.high = high
         self.basic = basic
         self.padding = padding
+        self.ngram_perm = ngram
+        self.permutes = permutes
 
     def get_basic_name(self, name):
         temp = len(name)
@@ -60,7 +92,7 @@ class SequentialRepresentation:
 
     def makefile(self):
         doto = '.o'
-        with open('../Makefile', 'w') as file:
+        with open('../examples/Makefile', 'w') as file:
             file.write('CC=clang' + '\n')
             file.write('CFLAGS=-I.' + '\n')
             file.write(self.name + ': ' + self.name + doto + '\n')
@@ -107,264 +139,277 @@ class SequentialRepresentation:
 
             file.write('#define BATCH ' + str(int(self.vector_size / 4)) + '\n')
             file.write('#define NUM_BATCH ' + str(int(self.dimensions / (self.vector_size / 4))) + '\n')
+            file.write('#define SIZE ' + str(math.floor(self.input_dim / self.num_threads) * self.num_threads) + '\n')
+            file.write('#define HIGH ' + str(self.high) + '\n')
+            file.write('int CORRECT_PREDICTIONS;\n')
 
-            file.write('float *TRAIN_DATA[TRAIN];\n')
-            file.write('float *TRAIN_LABELS[TRAIN];\n')
-            file.write('float *TEST_DATA[TEST];\n')
-            file.write('float *TEST_LABELS[TEST];\n')
-
-            file.write('struct EncodeTask {\n')
-            file.write('    int split_start;\n')
-            file.write('    float* indices;\n')
-            file.write('    f4si *res;\n')
+            file.write('struct DataReader {\n')
+            file.write('    char *path;\n')
+            file.write('    FILE *fp;\n')
+            file.write('    char * line;\n')
+            file.write('    size_t len;\n')
+            file.write('    ssize_t read;\n')
             file.write('};\n')
 
+            file.write('struct DataReader* train_data;\n')
+            file.write('struct DataReader* train_labels;\n')
+            file.write('struct DataReader* test_data;\n')
+            file.write('struct DataReader* test_labels;\n')
+
+            file.write('struct Task {\n')
+            file.write('    float* data;\n')
+            file.write('    int label;\n')
+            file.write('};\n')
+
+            if self.padding is not None:
+                file.write('float padding = '+str(self.padding)+'.0;')
+            else:
+                file.write('float padding = -1.0;')
+
     def define_dataset_loaders(self):
+        self.set_data_loaders()
         self.load_data()
         self.load_labels()
         self.load_dataset()
+        self.close_files()
+
+    def set_data_loaders(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+struct DataReader* set_load_data(char* path, struct DataReader* data_reader){
+    data_reader = (struct DataReader *)calloc(1, sizeof(struct DataReader));
+    data_reader -> path = path;
+    data_reader -> fp = fopen(path, "r");
+    data_reader -> line = NULL;
+    data_reader -> len = 0;
+
+    if (data_reader -> fp == NULL)
+        exit(EXIT_FAILURE);
+
+    return data_reader;
+}
+            '''
+            )
 
     def load_data(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-    void load_data(float* data[], char* path){
-        FILE * fp;
-        char * line = NULL;
-        size_t len = 0;
-        ssize_t read;
-        fp = fopen(path, "r");
-        if (fp == NULL)
-            exit(EXIT_FAILURE);
-        char* token;
-        int count = 0;
-        while ((read = getline(&line, &len, fp)) != -1) {
-            token = strtok(line, ",");
-            for (int i = 0; i < INPUT_DIM; i++){
-              *(data[count] + i) = (float) atof(token);
-              token = strtok(NULL, ",");
-            }
-            count += 1;
-        }
-        fclose(fp);
-        if (line)
-            free(line);`
+float* load_data_next_line(struct DataReader* data_reader){
+float* data = (float *) calloc(INPUT_DIM, sizeof(float));
+char* token;
+if ((data_reader -> read = getline(&data_reader -> line, &data_reader -> len, data_reader -> fp)) != -1) {
+    token = strtok(data_reader -> line, ",");
+    for (int i = 0; i < INPUT_DIM; i++){
+      *(data + i) = (float) atof(token);
+      token = strtok(NULL, ",");
     }
+}
+return data;
+}
             '''
             )
 
     def load_labels(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
-                    '''
-    void load_label(float* data[], char* path){
-        FILE * fp;
-        char * line = NULL;
-        size_t len = 0;
-        ssize_t read;
-        fp = fopen(path, "r");
-        if (fp == NULL)
-            exit(EXIT_FAILURE);
-        char* token;
-        int count = 0;
-        while ((read = getline(&line, &len, fp)) != -1) {
-            *(data[count]) = atoi(line);
-            count += 1;
-        }
-        fclose(fp);
-        if (line)
-            free(line);
-    }       
-                    '''
-                )
+                '''
+int load_labels_next_line(struct DataReader* data_reader){
+    int label;
+    char* token;
+    if ((data_reader -> read = getline(&data_reader -> line, &data_reader -> len, data_reader -> fp)) != -1) {
+         label = atoi(data_reader -> line);
+    }
+    return label;
+}
+                '''
+            )
 
     def load_dataset(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
-                    '''
-    void load_dataset(char **argv){
-        for (int i = 0; i < TRAIN; i++){
-            TRAIN_DATA[i] = (float *) calloc(INPUT_DIM, sizeof(float));
-            TRAIN_LABELS[i] = (float *) calloc(1, sizeof(int));
-        }
-    
-        for (int i = 0; i < TEST; i++){
-            TEST_DATA[i] = (float *) calloc(INPUT_DIM, sizeof(float));
-            TEST_LABELS[i] = (float *) calloc(1, sizeof(int));
-        }
-    
-        load_data(TRAIN_DATA, argv[1]);
-        load_data(TEST_DATA, argv[3]);
-        load_label(TRAIN_LABELS, argv[2]);
-        load_label(TEST_LABELS, argv[4]);
-    }
-                    '''
-                )
+                '''
+void prepare_to_load_data(char **argv){
+    train_data = set_load_data(argv[1], train_data);
+    train_labels = set_load_data(argv[2], train_labels);
+    test_data = set_load_data(argv[3], test_data);
+    test_labels = set_load_data(argv[4], test_labels);
+}
+                '''
+            )
+
+    def close_files(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+void close_file(struct DataReader* data_reader){
+    fclose(data_reader -> fp );
+    if (data_reader -> line)
+        free(data_reader -> line);
+}
+                '''
+            )
 
     def define_math_functions(self):
         self.define_random_number()
         self.define_random_vector()
         self.define_weights()
         self.define_update_weights()
+        self.define_update_correct_predictions()
         self.define_linear()
         self.define_norm2()
         self.define_normalize()
         self.define_argmax()
-        self.define_map_range_clamp()
+        self.define_map_range_clamp_one()
         self.define_hard_quantize()
 
     def define_random_number(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
-                    '''
-    float get_rand(float low_bound, float high_bound){
-        return (float) ((float)rand() / (float)RAND_MAX) * (high_bound - low_bound) + low_bound;
-    }
-                    '''
-                )
+                '''
+float get_rand(float low_bound, float high_bound){
+    return (float) ((float)rand() / (float)RAND_MAX) * (high_bound - low_bound) + low_bound;
+}
+                '''
+            )
 
     def define_random_vector(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
-                    '''
-    f4si *random_vector(int size, float low_bound, float high_bound){
-       f4si *arr = calloc(size * DIMENSIONS, sizeof(float));
-       int i, j, k;
-       for (i = 0; i < size; i++){
-          for (j = 0; j < NUM_BATCH; j++){
-             for(k = 0; k < BATCH; k++){
-                arr[i*NUM_BATCH+j][k] = get_rand(low_bound, high_bound);
-             }
-          }
-       }
-       return arr;
-    }
-                    '''
-                )
+                '''
+f4si *random_vector(int size, float low_bound, float high_bound){
+   f4si *arr = calloc(size * DIMENSIONS, sizeof(float));
+   int i, j, k;
+   for (i = 0; i < size; i++){
+      for (j = 0; j < NUM_BATCH; j++){
+         for(k = 0; k < BATCH; k++){
+            arr[i*NUM_BATCH+j][k] = get_rand(low_bound, high_bound);
+         }
+      }
+   }
+   return arr;
+}
+                '''
+            )
 
     def define_weights(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
+                '''
+void weights(){
+    WEIGHT = (float *)calloc(CLASSES * DIMENSIONS, sizeof(float));
+}
                     '''
-    void weights(){
-        WEIGHT = (float *)calloc(CLASSES * DIMENSIONS, sizeof(float));
-    }
-                        '''
-                )
+            )
 
     def define_update_weights(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
-                    '''
-    void update_weight(float* encoding, int feature){
-        int i;
-        for(i = 0; i < DIMENSIONS; i++){
-            *(WEIGHT + feature*DIMENSIONS + i) += (float)*(encoding + i);
-        }
+                '''
+void update_weight(float* encoding, int feature){
+    int i;
+    for(i = 0; i < DIMENSIONS; i++){
+        *(WEIGHT + feature*DIMENSIONS + i) += (float)*(encoding + i);
     }
-                        '''
-                )
+}
+                    '''
+            )
 
     def define_update_correct_predictions(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
+                '''
+void update_correct_predictions(){
+    CORRECT_PREDICTIONS += 1;
+}
                     '''
-    void update_correct_predictions(){
-        lock_condition(pool);
-        CORRECT_PREDICTIONS += 1;
-        unlock_condition(pool);
-    }
-                        '''
-                )
+            )
 
     def define_linear(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
+                '''
+float* linear(float* m){
+    int j, k;
+    float *arr = (float *)calloc(CLASSES, sizeof(float));
+    for (j = 0; j < DIMENSIONS; ++j) {
+      for (k = 0; k < CLASSES; ++k) {
+         *(arr + k) += (float)*(m + j) * *(WEIGHT + k*DIMENSIONS + j);
+      }
+   }
+    return arr;
+}
                     '''
-    float* linear(float* m){
-        int j, k;
-        float *arr = (float *)calloc(CLASSES, sizeof(float));
-        for (j = 0; j < DIMENSIONS; ++j) {
-          for (k = 0; k < CLASSES; ++k) {
-             *(arr + k) += (float)*(m + j) * *(WEIGHT + k*DIMENSIONS + j);
-          }
-       }
-        return arr;
-    }
-                        '''
-                )
+            )
 
     def define_norm2(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
+                '''
+float norm2(int feature){
+   float norm = 0.0;
+   int i;
+   for (i = 0; i < DIMENSIONS; i++){
+      norm += *(WEIGHT + feature*DIMENSIONS + i) * *(WEIGHT + feature*DIMENSIONS + i);
+   }
+   return sqrt(norm);
+}
                     '''
-    float norm2(int feature){
-       float norm = 0.0;
-       int i;
-       for (i = 0; i < DIMENSIONS; i++){
-          norm += *(WEIGHT + feature*DIMENSIONS + i) * *(WEIGHT + feature*DIMENSIONS + i);
-       }
-       return sqrt(norm);
-    }
-                        '''
-                )
+            )
 
-        def define_normalize(self):
-            with open(self.name.lower() + '.c', 'a') as file:
-                file.write(
+    def define_normalize(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+void normalize(){
+   float eps = 1e-12;
+   int i, j;
+   for (i = 0; i < CLASSES; i++){
+      float norm = norm2(i);
+      for (j = 0; j < DIMENSIONS; j++){
+        *(WEIGHT + i*DIMENSIONS + j) = *(WEIGHT + i*DIMENSIONS + j) / max(norm,eps);
+      }
+   }
+}
                     '''
-    void normalize(){
-       float eps = 1e-12;
-       int i, j;
-       for (i = 0; i < CLASSES; i++){
-          float norm = norm2(i);
-          for (j = 0; j < DIMENSIONS; j++){
-            *(WEIGHT + i*DIMENSIONS + j) = *(WEIGHT + i*DIMENSIONS + j) / max(norm,eps);
-          }
-       }
-    }
-                        '''
-                )
+            )
 
     def define_argmax(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
-                    '''
-    int argmax(float* classify){
-       int i;
-       int max_i = 0;
-       float max = 0;
-       for (i = 0; i < CLASSES; i++){
-           if(*(classify + i) > max){
-               max = *(classify + i);
-               max_i = i;
-           }
+                '''
+int argmax(float* classify){
+   int i;
+   int max_i = 0;
+   float max = 0;
+   for (i = 0; i < CLASSES; i++){
+       if(*(classify + i) > max){
+           max = *(classify + i);
+           max_i = i;
        }
-       return max_i;
-    }
-                        '''
-                )
+   }
+   return max_i;
+}
+                    '''
+            )
 
-    def define_map_range_clamp(self):
+    def define_map_range_clamp_one(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
-                    '''
-    float** map_range_clamp(float* arr[], int size, float out_max, float* res[]){
-       float in_min = 0;
-       float in_max = 1;
-       float out_min = 0;
-       int i, j;
-       for (i = 0; i < size; i++){
-          for (j = 0; j < INPUT_DIM; j++){
-            float map_range = round(out_min + (out_max - out_min) * (*(arr[i] + j) - in_min) / (in_max - in_min));
-            *(res[i] + j) = min(max(map_range,out_min),out_max);
-          }
-          free(arr[i]);
-       }
-       return res;
+                '''
+void map_range_clamp_one(float* arr, float out_max, float* res){
+    float in_min = 0;
+    float in_max = HIGH;
+    float out_min = 0;
+    int i, j;
+    for (j = 0; j < INPUT_DIM; j++){
+        float map_range = round(out_min + (out_max - out_min) * (*(arr + j) - in_min) / (in_max - in_min));
+        *(res + j) = min(max(map_range,out_min),out_max);
     }
-                        '''
-                )
+}
+                    '''
+            )
 
     def define_hard_quantize(self):
         with open(self.name.lower() + '.c', 'a') as file:
@@ -386,12 +431,12 @@ void hard_quantize(float *arr, int size){
                     '''
             )
 
-    def bind(self):
+    def multibind(self):
         """Binds a set of hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-f4si *bind(f4si *a, f4si *b){
+f4si *multibind(f4si *a, f4si *b){
     int i, j;
     f4si *enc = (f4si *)calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
     for(i = 0; i < INPUT_DIM; ++i){
@@ -427,93 +472,127 @@ f4si *multibind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-
-f4si* ngram(f4si* arr, float* indices, f4si* enc, const int n){
+f4si* ngram(f4si* arr, f4si* enc, const int d){
     int i, j, k;
     f4si aux;
-    f4si * forward_arr = calloc(DIMENSIONS * n, sizeof(int));
+    f4si * forward_arr = calloc(DIMENSIONS * d, sizeof(int));
     f4si actual;
-    float n1, p1;
-    float n2, p2;
-    for (i = 0; i < (INPUT_DIM-(n-1)); ++i){
+    float n[d];
+    float p[d];
+    for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
         for (j = 0; j < NUM_BATCH; j++){
-            for (k = 0; k < n; ++k){
-                if (k == 0){
-                    if (j == NUM_BATCH-1){
-                        for (int m = 0; m < n; m++){
-                            if (indices[i] != padding){
-                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
-                            } else {
-                                forward_arr[(m*NUM_BATCH)+j] *= 0;
-                            }
-                        }
-                       aux = __builtin_shufflevector(forward_arr[k*NUM_BATCH+j],forward_arr[k*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
-                       aux[0] = p1;
-                       aux[1] = p2;
-                   } else if (j == 0){
-                        for (int m = 0; m < n; m++){
-                            if (indices[i] != padding){
-                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
-                            } else {
-                                forward_arr[(m*NUM_BATCH)+j] *= 0;
-                            }
-                        }
-                       aux = __builtin_shufflevector(forward_arr[k*NUM_BATCH+j],forward_arr[k*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
-                       p1 = aux[0];
-                       p2 = aux[1];
-                   } else {
-                        for (int m = 0; m < n; m++){
-                            if (indices[i] != padding){
-                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
-                            } else {
-                                forward_arr[(m*NUM_BATCH)+j] *= 0;
-                            }
-                        }
-                       aux = __builtin_shufflevector(forward_arr[k*NUM_BATCH+j],forward_arr[k*NUM_BATCH+j],30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29);
-                       n1 = aux[0];
-                       n2 = aux[1];
-                       aux[0] = p1;
-                       aux[1] = p2;
-                       p1 = n1;
-                       p2 = n2;
-                    }
-                    actual = aux; // 2 pos
-                } else if (k == n-1){
+            for (k = 0; k < d; ++k){
+                if (k == d-1){
                     actual = actual * forward_arr[k*NUM_BATCH+j];
                 } else {
                        if (j == NUM_BATCH-1){
-                           aux = __builtin_shufflevector(forward_arr[k*NUM_BATCH+j],forward_arr[k*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
-                           aux[0] = p1;
+                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                           aux[k] = p[k];
                        } else if (j == 0){
-                           aux = __builtin_shufflevector(forward_arr[k*NUM_BATCH+j],forward_arr[k*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
-                           p1 = aux[0];
+                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                           p[k] = aux[k];
                        } else {
-                           aux = __builtin_shufflevector(forward_arr[k*NUM_BATCH+j],forward_arr[k*NUM_BATCH+j],31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30);
-                           n1 = aux[0];
-                           aux[0] = p1;
-                           p1 = n1;
+                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                           n[k] = aux[k];
+                           aux[k] = p[k];
+                           p[k] = n[k];
                        }
-                    //res[i*NUM_BATCH+j] = res[(i)*NUM_BATCH+j] * shuffle(arr[(i+k)*NUM_BATCH+j], (n-1-k))
-
                     actual = aux * actual;
                 }
-
               }
                enc[j] = enc[j] + actual;
-
-
-
         }
     }
     free(forward_arr);
     return enc;
 }
-
                 '''
             )
 
+    def generate_shuffle(self):
+        """Ngram a set of hypervectors together"""
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(generate_shuffle(self.ngram_perm, self.vector_size))
 
-    def bundle(self):
+    def ngram_forward(self):
+        """Ngram a set of hypervectors together"""
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
+    int i, j, k;
+    f4si aux;
+    f4si * forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+    f4si actual;
+    float n[d];
+    float p[d];
+    for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+        for (j = 0; j < NUM_BATCH; j++){
+            for (k = 0; k < d; ++k){
+                if (k == 0){
+                    if (j == NUM_BATCH-1){
+                        for (int m = 0; m < d; m++){
+                            if (indices[i] != padding){
+                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                            } else {
+                                forward_arr[(m*NUM_BATCH)+j] *= 0;
+                            }
+                        }
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                       aux[k] = p[k];
+                   } else if (j == 0){
+                        for (int m = 0; m < d; m++){
+                            if (indices[i] != padding){
+                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                            } else {
+                                forward_arr[(m*NUM_BATCH)+j] *= 0;
+                            }
+                        }
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                       p[k] = aux[k];
+
+                   } else {
+                        for (int m = 0; m < d; m++){
+                            if (indices[i] != padding){
+                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                            } else {
+                                forward_arr[(m*NUM_BATCH)+j] *= 0;
+                            }
+                        }
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                       n[k] = aux[k];
+                       aux[k] = p[k];
+                       p[k] = n[k];
+                    }
+                    actual = aux; 
+                } else if (k == d-1){
+                    actual = actual * forward_arr[k*NUM_BATCH+j];
+                } else {
+                       if (j == NUM_BATCH-1){
+                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                           aux[k] = p[k];
+                       } else if (j == 0){
+                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                           p[k] = aux[k];
+                       } else {
+                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                           n[k] = aux[k];
+                           aux[k] = p[k];
+                           p[k] = n[k];
+                       }
+                    actual = aux * actual;
+                }
+              }
+               enc[j] = enc[j] + actual;
+        }
+    }
+    free(forward_arr);
+    return enc;
+}
+                '''
+            )
+
+    def multiset(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
@@ -530,12 +609,12 @@ f4si *multiset(f4si *a){
                 '''
             )
 
-    def multiset_bind_forward(self):
+    def multiset_multibind_forward(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-f4si *multiset_bind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
+f4si *multiset_multibind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
     int i, j;
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < NUM_BATCH; j++){
@@ -547,12 +626,12 @@ f4si *multiset_bind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
                 '''
             )
 
-    def multiset_bind(self):
+    def multiset_multibind(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
-f4si *multiset_bind(f4si *a, f4si *b, f4si* enc){
+f4si *multiset_multibind(f4si *a, f4si *b, f4si* enc){
     int i, j;
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < NUM_BATCH; j++){
@@ -564,7 +643,7 @@ f4si *multiset_bind(f4si *a, f4si *b, f4si* enc){
                 '''
             )
 
-    def bundle_forward(self):
+    def multiset_forward(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
@@ -581,46 +660,81 @@ f4si *multiset_forward(f4si *a, float* indices){
                 '''
             )
 
-    def permute(self):
+    def forward(self):
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(
                 '''
- f4si *permute(f4si* arr, int dd, int ini, int fi)
+f4si *forward(f4si *a, float* indices, f4si* enc){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
+        }
+    }
+    return enc;
+}              
+                ''')
+
+    def permute(self):
+        for i in self.permutes:
+            with open(self.name.lower() + '.c', 'a') as file:
+                file.write(
+                    '''
+f4si *permute''' + str(i) + '''(f4si* arr, int dd, int ini, int fi)
 {
 
     int k, j, i;
-    float last;
+    float n[dd];
+    float p[dd];
+
     f4si * res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
     for (i = ini; i < fi; ++i){
       for (j = 0; j < NUM_BATCH; j++){
-         for(k = 0; k < BATCH; k++){
-            if ((BATCH*j)+k+dd < ((BATCH*NUM_BATCH))){
-                if (k+dd >= BATCH){
-                    int num = (k+dd) % BATCH;
-                    res[(i-ini)*NUM_BATCH+j+1][num] = arr[i*NUM_BATCH+j][k];
-                } else {
-                    res[(i-ini)*NUM_BATCH+j][k+dd] = arr[i*NUM_BATCH+j][k];
-                }
-            } else {
-                int num = (k+dd) % BATCH;
-                res[(i-ini-1)*NUM_BATCH+j+(1)][num] = arr[i*NUM_BATCH+j][k];
-            }
-         }
-
+       if (j == NUM_BATCH-1){
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j]''' + generate(
+                        self.vector_size / 4, i) + ''');
+           for (k = 0; k < dd; k++){
+               res[i*NUM_BATCH+j][k] = p[k];
+           }
+       } else if (j == 0){
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j]''' + generate(
+                        self.vector_size / 4, i) + ''');
+           for (k = 0; k < dd; k++){
+               p[k] = res[i*NUM_BATCH+j][k];
+           }
+       } else {
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j]''' + generate(
+                        self.vector_size / 4, i) + ''');
+           for (k = 0; k < dd; k++){
+               n[k] = res[i*NUM_BATCH+j][k];
+               res[i*NUM_BATCH+j][k] = p[k];
+               p[k] = n[k];
+               n[k] = p[k];
+           }
+       }
       }
-
     }
-
     return res;
 }
                 '''
-            )
+
+                )
 
     def define_hdc_functions(self):
         self.define_random_hv()
         self.define_level_hv()
+        self.multibind()
+        self.multibind_forward()
+        self.multiset()
+        self.multiset_forward()
+        self.permute()
+        self.multiset_multibind()
+        self.multiset_multibind_forward()
+        if self.ngram_perm != None:
+            self.generate_shuffle()
+            self.ngram()
+            self.ngram_forward()
         self.define_encoding_function()
-        self.define_encoding()
 
     def define_random_hv(self):
         with open(self.name.lower() + '.c', 'a') as file:
@@ -674,17 +788,6 @@ f4si *level_hv(int levels){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(self.encoding_fun)
 
-    def define_encoding(self):
-        """Generates the encoding"""
-        with open(self.name.lower() + '.c', 'a') as file:
-            file.write('''
-    float* encodings(float* x){
-        float* enc = (float*)encode_function(x);
-        hard_quantize(enc,1);
-        return enc;
-    }
-                    ''')
-
     def define_train_and_test(self):
         self.define_train_loop()
         self.define_test_loop()
@@ -694,17 +797,12 @@ f4si *level_hv(int levels){
             file.write(
                 '''
 void train_loop(){
-    float *res[TRAIN];
     int i;
-    for (i = 0; i < TRAIN; i++){
-        res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
-    }
-    map_range_clamp(TRAIN_DATA,TRAIN,''' + self.weight_var + '''_DIM-1, res);
     for(i = 0; i < TRAIN; i++){
-        float* enc = encodings(res[i]);
-        update_weight(enc,*(TRAIN_LABELS[i]));
-        free(res[i]);
-        free(enc);
+        struct Task *task = (struct Task *)calloc(1,sizeof(struct Task));
+        task -> data = load_data_next_line(train_data);
+        task -> label = load_labels_next_line(train_labels);
+        encode_train_task(task);
     }
     normalize();
 }
@@ -716,25 +814,14 @@ void train_loop(){
             file.write(
                 '''
 float test_loop(){
-float *res[TEST];
-int i;
-for (i = 0; i < TEST; i++){
-    res[i] = (float *)calloc(INPUT_DIM, sizeof(float));
-}
-map_range_clamp(TEST_DATA,TEST,INPUT_DIM-1, res);
-int correct_pred = 0;
-for(i = 0; i < TEST; i++){
-    float* enc = encodings(res[i]);
-    float *l = linear(enc);
-    int index = argmax(l);
-    if((int)index == (int)*(TEST_LABELS[i])){
-        correct_pred += 1;
+    int i;
+    for(i = 0; i < TEST; i++){
+        struct Task *task = (struct Task *)calloc(1,sizeof(struct Task));
+        task -> data = load_data_next_line(test_data);
+        task -> label = load_labels_next_line(test_labels);
+        encode_test_task(task);
     }
-    free(l);
-    free(res[i]);
-    free(enc);
-}
-return correct_pred/(float)TEST;
+    return CORRECT_PREDICTIONS/(float)TEST;
 }
                 '''
             )
@@ -750,7 +837,7 @@ int main(int argc, char **argv) {
                 +
                 '''
     weights();
-    load_dataset(argv);
+    prepare_to_load_data(argv);
     '''
             )
             if self.debug:
@@ -785,6 +872,6 @@ int main(int argc, char **argv) {
 
             file.write(
                 '''
-    }              
+}              
                 '''
             )
