@@ -27,7 +27,6 @@ def transform(x):
 class Model(nn.Module):
     def __init__(self, num_classes, timestamps, channels):
         super(Model, self).__init__()
-        print(timestamps)
         self.channels = embeddings.Random(channels, DIMENSIONS)
         self.timestamps = embeddings.Random(timestamps, DIMENSIONS)
         self.signals = embeddings.Level(NUM_LEVELS, DIMENSIONS, high=20)

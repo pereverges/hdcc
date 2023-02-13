@@ -15,10 +15,10 @@ def main():
     NUM_CLASSES = 10
     transform = torchvision.transforms.ToTensor()
 
-    train_ds = MNIST("../../data", train=True, transform=transform, download=True)
+    train_ds = MNIST("../../data", train=False, transform=transform, download=True)
     train_ld = torch.utils.data.DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=False)
 
-    test_ds = MNIST("../../data", train=False, transform=transform, download=True)
+    test_ds = MNIST("../../data", train=False, transform=transform, download=False)
     test_ld = torch.utils.data.DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False)
 
     position = embeddings.Random(784, DIMENSIONS)

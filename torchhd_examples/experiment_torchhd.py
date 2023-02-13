@@ -11,7 +11,9 @@ folder = '../results/'
 out_file = sys.argv[1]
 
 dimensions = [64, 128, 512, 1024, 4096, 10240]
-files = ['languages','emg', 'voicehd', 'mnist']
+#files = ['languages','emg', 'voicehd', 'mnist']
+files = ['emg', 'voicehd', 'mnist']
+
 patients = ['0','1','2','3','4']
 repetitions = 5
 
@@ -26,25 +28,23 @@ for file in files:
                     for patient in patients:
                         res = subprocess.check_output(['python3', file + '.py', patient, str(dim)]).decode(sys.stdout.encoding)
                         try:
-                            subprocess.check_output(
-                                ["mprof", "run", "--multiprocess", "--include-children", "python3", file + '.py',
-                                 patient, str(dim)])
+                            subprocess.check_output(["python","/home/pverges/.local/lib/python3.9/site-packages/mprof.py","run","--multiprocess","--include-children","python3",file + '.py', patient, str(dim)])
                         except:
                             print('Error')
                         DEVNULL = open(os.devnull, 'wb', 0)
-                        memor = subprocess.check_output(['mprof', 'peak']).decode(sys.stdout.encoding).split()[-6]
+                        memor = subprocess.check_output(["python","/home/pverges/.local/lib/python3.9/site-packages/mprof.py", 'peak']).decode(sys.stdout.encoding).split()[-6]
                         if memor == 'last':
-                            memor = subprocess.check_output(['mprof', 'peak']).decode(sys.stdout.encoding).split()[-2]
+                            memor = subprocess.check_output(["python","/home/pverges/.local/lib/python3.9/site-packages/mprof.py", 'peak']).decode(sys.stdout.encoding).split()[-2]
                         res += ',' + str(float(memor) * 1000000) + '\n'
 
                         output.writelines(res)
                 else:
                     res = subprocess.check_output(['python3', file + '.py', str(dim)]).decode(sys.stdout.encoding)
                     try:
-                        subprocess.check_output(["mprof","run","--multiprocess","--include-children","python3",file + '.py', str(dim)])
+                        subprocess.check_output(["python","/home/pverges/.local/lib/python3.9/site-packages/mprof.py","run","--multiprocess","--include-children","python3",file + '.py', str(dim)])
                     except:
                         print('Error')
                     DEVNULL = open(os.devnull, 'wb', 0)
-                    res += ','+str(float(subprocess.check_output(['mprof', 'peak']).decode(sys.stdout.encoding).split()[-2])*1000000)+'\n'
+                    res += ','+str(float(subprocess.check_output(["python","/home/pverges/.local/lib/python3.9/site-packages/mprof.py", 'peak']).decode(sys.stdout.encoding).split()[-2])*1000000)+'\n'
 
                     output.writelines(res)
