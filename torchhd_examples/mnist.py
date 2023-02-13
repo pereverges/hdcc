@@ -56,6 +56,6 @@ def main():
             if predictions == labels:
                 correct_pred += 1
 
-    print('mnist,'+str(DIMENSIONS) +',' + str(time.time()-t)+','+str((correct_pred/len(labels)/1000)), end='')
+    print('mnist,'+str(DIMENSIONS) +',' + str(time.time()-t)+','+str((correct_pred/len(labels)/10000)), end='')
 
 main()
