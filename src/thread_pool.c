@@ -32,6 +32,7 @@ struct ThreadPool {
     Job *FRONT;
     Job *REAR;
 };
+#include <sys/syscall.h>
 
 static void *threadExecutor(void *pl) {
 	ThreadPool *pool = (ThreadPool *)pl;   // Get the pool
@@ -39,6 +40,7 @@ static void *threadExecutor(void *pl) {
 	++pool->threadID;                      // Get an id
     pthread_mutex_unlock(&pool->queuemutex);
     while(pool->run) {
+
         pthread_mutex_lock(&pool->queuemutex); // Lock the queue mutex
 		if(pool->removeThreads > 0) {
             pthread_mutex_lock(&pool->condmutex);
@@ -73,8 +75,9 @@ static void *threadExecutor(void *pl) {
             pthread_mutex_unlock(&pool->queuemutex); // Unlock the mutex
 			presentJob->function(presentJob->args); // Execute the job
 			free(presentJob); // Release memory for the job
-			}
         }
+
+    }
     if(pool->run) {
         pool->removeThreads--; // Alright, I'm shutting now
         pthread_mutex_unlock(&pool->queuemutex);
@@ -100,6 +103,7 @@ ThreadPoolStatus mt_add_thread(ThreadPool *pool, uint64_t threads) {
 	for(i = 0; i < threads; i++) {
 		ThreadList *newThread = (ThreadList *)malloc(sizeof(ThreadList)); // Allocate a new thread
 		newThread->next = NULL;
+		//printf("create pthread %d\n", &newThread->thread);
 		temp = pthread_create(&newThread->thread, NULL, threadExecutor, (void *)pool); // Start the thread
 		if(temp) {
 			pthread_mutex_lock(&pool->condmutex);

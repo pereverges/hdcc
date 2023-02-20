@@ -98,7 +98,9 @@ class ParallelRepresentation:
 
     def makefile(self):
         dotc = '.c'
-        with open('../examples/Makefile', 'w') as file:
+        import os
+        cwd = os.getcwd()
+        with open(str(cwd)+'/Makefile', 'w') as file:
             file.write('CC=clang' + '\n')
             file.write('all: ../src/thread_pool.c ../src/thread_pool.h ' + self.name + dotc + '\n')
             file.write('\t$(CC) ../src/thread_pool.c ' + self.name + dotc + ' -lpthread -lm -O3 -o ' + self.name + '\n')
