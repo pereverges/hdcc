@@ -92,9 +92,10 @@ class SequentialRepresentation:
 
     def makefile(self):
         doto = '.o'
-        with open('../examples/Makefile', 'w') as file:
+        import os
+        cwd = os.getcwd()
+        with open(str(cwd)+'/Makefile', 'w') as file:
             file.write('CC=clang' + '\n')
-            file.write('CFLAGS=-I.' + '\n')
             file.write(self.name + ': ' + self.name + doto + '\n')
             file.write('\t$(CC) -o ' + self.name + ' ' + self.name + doto + ' -lm -O3\n')
 
