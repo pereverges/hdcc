@@ -1,0 +1,4 @@
+Application,Dimensions,Time,Accuracy,Memory,Threads
+mnist,10240,76.446987,0.824900,77133376,1
+languages,10240,51.291893,0.975857,126781440,1
+

@@ -13,14 +13,14 @@ folder = 'results/'
 out_file = sys.argv[1]
 
 dimensions = [10240]
-files = ['mnist']
+files = ['languages']
 #files = ['languages','mnist']
-train_size = [60000]
+train_size = [210032]
 #train_size = [210032, 60000]
-test_size = [10000]
+test_size = [21000]
 #test_size = [21000, 10000]
 vector_size = 128
-num_threads = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
+num_threads = [16]
 type_exec = 'PARALLEL'
 repetitions = 1
 
