@@ -27,7 +27,7 @@ class hdccAST:
         self.high = 0
         self.padding = None
 
-
+        self.vectorial = None
         self.basic = True
         self.multiset = False
         self.multibind = False
@@ -37,7 +37,7 @@ class hdccAST:
     def get_ast_obj(self):
         return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, \
                self.encoding_fun, self.train_size, self.test_size, self.num_threads, self.vector_size, self.type,\
-               self.input_dim, self.high, self.basic, self.padding, self.permutes, self.ngram, self.multiset
+               self.input_dim, self.high, self.basic, self.padding, self.permutes, self.ngram, self.multiset, self.vectorial
 
     def validateDirective(self, x):
         action, params = self.astDirective.resolve(x)
@@ -47,7 +47,7 @@ class hdccAST:
         else:
             self.error_repeated_directive(action, params[0])
         if action == 'ENCODING':
-            if self.dimensions is not None and self.type is not None:
+            if self.dimensions is not None and self.type is not None and self.vectorial is not None:
                 self.wait = False
                 enc = ''
                 _, self.encoding, _, _ = self.unpack_encoding(params[1], enc)
@@ -79,7 +79,7 @@ class hdccAST:
             self.debug = True
         if action == 'DIMENSIONS':
             self.dimensions = params[1]
-            if self.wait is not None and self.type is not None:
+            if self.wait is not None and self.type is not None and self.vectorial is not None:
                 enc = ''
                 _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
                 self.encoding_build(self.encoding, self.encoding)
@@ -90,7 +90,7 @@ class hdccAST:
             self.test_size = params[1]
         if action == 'NUM_THREADS':
             self.num_threads = params[1]
-            if self.wait is not None:
+            if self.wait is not None and self.vectorial is not None:
                 enc = ''
                 _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
                 self.encoding_build(self.encoding, self.encoding)
@@ -106,6 +106,16 @@ class hdccAST:
             self.input_dim = params[1]
         if action == 'MODE':
             self.basic = params[1]
+        if action == 'VECTORIAL':
+            if params[1] == 'TRUE':
+                self.vectorial = True
+            else:
+                self.vectorial = False
+            if self.wait is not None:
+                enc = ''
+                _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
+                self.encoding_build(self.encoding, self.encoding)
+                self.wait = None
 
     def unpack_encoding(self, i, enc):
         if self.basic:
@@ -135,7 +145,10 @@ class hdccAST:
                 b, enc_aux, _, _ = self.unpack_encoding(i[2], enc)
                 enc += enc_aux
                 self.permutes += [i[3]]
-                enc += '\n    enc = permute'+str(i[3])+'(' + b + ',' + str(i[3]) + ',0,1);'
+                if self.vectorial:
+                    enc += '\n    enc = permute'+str(i[3])+'(' + b + ',' + str(i[3]) + ',0,1);'
+                else:
+                    enc += '\n    permute(' + b + ',' + str(i[3]) + ',0,1, enc);'
                 return 'enc', enc, '', ''
             elif i[1] == 'NGRAM':
                 b, enc_aux, _, _ = self.unpack_encoding(i[2], enc)
@@ -212,12 +225,16 @@ void encode_train_task(void* task){'''
         fun_head_test = '''
 void encode_test_task(void* task){'''
 
+        if self.vectorial:
+            enc = '''f4si * enc = calloc(''' + space + ''', sizeof(int));'''
+        else:
+            enc = '''float * enc = calloc(''' + space + ''', sizeof(int));'''
         self.encoding_fun = fun_head_train + '''
     float* data = ((struct Task*)task) -> data;
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc(''' + space + ''', sizeof(int));
+    ''' + enc + '''
     ''' + var + '''
     hard_quantize((float*)enc,1);
     update_weight((float*)enc,label);
@@ -231,7 +248,7 @@ void encode_test_task(void* task){'''
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc(''' + space + ''', sizeof(int));
+    ''' + enc + '''
     ''' + var + '''
     float *l = linear((float*)enc);
     if(argmax(l) == label){
@@ -254,12 +271,17 @@ void encode_train_task(void* task){'''
         fun_head_test = '''
 void encode_test_task(void* task){'''
 
+        if self.vectorial:
+            enc = '''f4si * enc = calloc(''' + space + ''', sizeof(int));'''
+        else:
+            enc = '''float * enc = calloc(''' + space + ''', sizeof(int));'''
+
         self.encoding_fun = fun_head_train + '''
     float* data = ((struct Task*)task) -> data;
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc('''+space+''', sizeof(int));
+    ''' + enc + '''
     ''' + var + '''
     hard_quantize((float*)enc,1);
     update_weight((float*)enc,label);
@@ -273,7 +295,7 @@ void encode_test_task(void* task){'''
     int label = ((struct Task*)task) -> label;
     float* indices = (float *)calloc(INPUT_DIM, sizeof(float));
     map_range_clamp_one(data,''' + self.weight + '''_DIM-1, indices);
-    f4si * enc = calloc('''+space+''', sizeof(int));
+    ''' + enc + '''
     ''' + var + '''
     float *l = linear((float*)enc);
     if(argmax(l) == label){

@@ -33,10 +33,10 @@ if debug:
     ast.print_parsed_and_validated_input()
 
 name, classes, dimensions, used_vars, weight, encoding, embeddings, debug, encoding_fun, train_size, test_size, \
-num_threads, vector_size, type, input_dim, high, basic, padding, permutes, ngram, not_multiset = ast.get_ast_obj()
+num_threads, vector_size, type, input_dim, high, basic, padding, permutes, ngram, not_multiset, vectorial = ast.get_ast_obj()
 
 ir = IntermediateRepresentation(name, classes, dimensions, used_vars, weight, encoding, embeddings, debug,
                                 encoding_fun, train_size, test_size, num_threads, vector_size, type, input_dim,
-                                high, basic, padding, permutes, ngram, path, not_multiset)
+                                high, basic, padding, permutes, ngram, path, not_multiset, vectorial)
 
 ir.run()

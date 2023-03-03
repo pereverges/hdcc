@@ -33,7 +33,7 @@ f4si shuffle(f4si arr, int d){
 class ParallelRepresentation:
     def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun,
                  train_size, test_size, num_threads, vector_size, type, input_dim, high, basic, padding, permutes,
-                 ngram, path, not_multiset):
+                 ngram, path, not_multiset, vectorial):
         self.n = name
         self.path = path
         self.name = self.path + self.n
@@ -58,6 +58,7 @@ class ParallelRepresentation:
         self.permutes = permutes
         self.ngram_perm = ngram
         self.not_multiset = not_multiset
+        self.vectorial = vectorial
 
     def get_basic_name(self, name):
         temp = len(name)
@@ -138,12 +139,16 @@ class ParallelRepresentation:
             file.write('#define CLASSES ' + str(self.classes) + '\n')
             file.write('#define VECTOR_SIZE ' + str(self.vector_size) + '\n')
             file.write('float *WEIGHT;\n')
-            file.write('typedef float f4si __attribute__ ((vector_size (' + str(self.vector_size) + ')));\n')
+            if self.vectorial:
+                file.write('typedef float f4si __attribute__ ((vector_size (' + str(self.vector_size) + ')));\n')
 
             file.write('#define INPUT_DIM ' + str(self.input_dim) + '\n')
 
             for i in self.embeddings:
-                file.write('f4si* ' + str(i[1]) + ';\n')
+                if self.vectorial:
+                    file.write('f4si* ' + str(i[1]) + ';\n')
+                else:
+                    file.write('float* ' + str(i[1])+ ';\n')
                 file.write('#define ' + str(i[1]) + '_DIM ' + str(i[2]) + '\n')
 
             file.write('#define BATCH ' + str(int(self.vector_size / 4)) + '\n')
@@ -291,22 +296,38 @@ float get_rand(float low_bound, float high_bound){
 
     def define_random_vector(self):
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
-                '''
-f4si *random_vector(int size, float low_bound, float high_bound){
-   f4si *arr = calloc(size * DIMENSIONS, sizeof(float));
+            if self.vectorial:
+                file.write(
+                    '''
+    f4si *random_vector(int size, float low_bound, float high_bound){
+       f4si *arr = calloc(size * DIMENSIONS, sizeof(float));
+       int i, j, k;
+       for (i = 0; i < size; i++){
+          for (j = 0; j < NUM_BATCH; j++){
+             for(k = 0; k < BATCH; k++){
+                arr[i*NUM_BATCH+j][k] = get_rand(low_bound, high_bound);
+             }
+          }
+       }
+       return arr;
+    }
+                    '''
+                )
+            else:
+                file.write(
+                    '''
+float *random_vector(int size, float low_bound, float high_bound){
+   float *arr = calloc(size * DIMENSIONS, sizeof(float));
    int i, j, k;
    for (i = 0; i < size; i++){
-      for (j = 0; j < NUM_BATCH; j++){
-         for(k = 0; k < BATCH; k++){
-            arr[i*NUM_BATCH+j][k] = get_rand(low_bound, high_bound);
-         }
+      for (j = 0; j < DIMENSIONS; j++){
+        arr[(i*DIMENSIONS)+j] = get_rand(low_bound, high_bound);
       }
    }
    return arr;
 }
-                '''
-            )
+                    '''
+                )
 
     def define_weights(self):
         with open(self.name.lower() + '.c', 'a') as file:
@@ -451,7 +472,8 @@ void hard_quantize(float *arr, int size){
     def multibind(self):
         """Binds a set of hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
+            if self.vectorial:
+                file.write(
                 '''
 f4si *multibind(f4si *a, f4si *b){
     int i, j;
@@ -465,11 +487,27 @@ f4si *multibind(f4si *a, f4si *b){
 }
                 '''
             )
+            else:
+                file.write(
+                '''
+float *multibind(float *a, float *b){
+    int i, j;
+    float *enc = (float *)calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < DIMENSIONS; j++){
+             enc[(DIMENSIONS * i) + j] = a[(DIMENSIONS * i) + j] * b[DIMENSIONS + j];
+        }
+    }
+    return enc;
+}
+                '''
+            )
 
     def multibind_forward(self):
         """Binds a set of hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
+            if self.vectorial:
+                file.write(
                 '''
 f4si *multibind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
     int i, j;
@@ -483,11 +521,27 @@ f4si *multibind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
 
                 '''
             )
+            else:
+                file.write(
+                '''
+float *multibind_forward(float *a, float *b, float* indices, float* enc){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < DIMENSIONS; j++){
+            enc[(DIMENSIONS * i) + j] = a[(DIMENSIONS * i) + j] * b[(int)indices[i]* DIMENSIONS + j];
+        }
+    }
+    return enc;
+}
+
+                '''
+            )
 
     def ngram(self):
         """Ngram a set of hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
+            if self.vectorial:
+                file.write(
                 '''
 f4si* ngram(f4si* arr, f4si* enc, const int d){
     int i, j, k;
@@ -525,6 +579,32 @@ f4si* ngram(f4si* arr, f4si* enc, const int d){
 }
                 '''
             )
+            else:
+                file.write(
+                    '''
+float* ngram(float* arr, float* enc, const int d){
+    int i, j, k;
+
+    float* res = calloc(DIMENSIONS * (INPUT_DIM-(d-1)), sizeof(float));
+    float* sample = calloc(DIMENSIONS * (INPUT_DIM-(d-1)), sizeof(float));
+
+    permute(arr, d-1, 0, (INPUT_DIM-(d-1)), res);
+    for (i = 1; i < d; i++){
+        permute(arr, d-i-1, i, (INPUT_DIM-(d-i-1)), sample);
+        for (j = 0; j < (INPUT_DIM-(d-1)); ++j){
+            for (int k = 0; k < DIMENSIONS; k++){
+                res[(j*DIMENSIONS)+k] = res[(j*DIMENSIONS)+k] * sample[(j*DIMENSIONS)+k];
+                enc[k] = enc[k] + res[(j*DIMENSIONS)+k];
+            }
+        }
+    }
+
+    free(sample);
+    free(res);
+    return enc;
+}
+'''
+                )
 
     def generate_shuffle(self):
         """Ngram a set of hypervectors together"""
@@ -534,7 +614,8 @@ f4si* ngram(f4si* arr, f4si* enc, const int d){
     def ngram_forward(self):
         """Ngram a set of hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
+            if self.vectorial:
+                file.write(
                 '''
 f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
     int i, j, k;
@@ -608,11 +689,39 @@ f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
 }
                 '''
             )
+            else:
+                file.write(
+                    '''
+float* ngram_forward(float* arr, float* indices, float* enc, const int d){
+    int i, j, k;
+    float* forw = forward(arr,indices);
+    float* res = calloc(DIMENSIONS * (INPUT_DIM-(d-1)), sizeof(float));
+    float* sample = calloc(DIMENSIONS * (INPUT_DIM-(d-1)), sizeof(float));
+
+    permute(forw, d-1, 0, (INPUT_DIM-(d-1)), res);
+    for (i = 1; i < d; i++){
+        permute(forw, d-i-1, i, (INPUT_DIM-(d-i-1)), sample);
+        for (j = 0; j < (INPUT_DIM-(d-1)); ++j){
+            for (int k = 0; k < DIMENSIONS; k++){
+                res[(j*DIMENSIONS)+k] = res[(j*DIMENSIONS)+k] * sample[(j*DIMENSIONS)+k];
+                enc[k] = enc[k] + res[(j*DIMENSIONS)+k];
+            }
+        }
+    }
+
+    free(forw);
+    free(sample);
+    free(res);
+    return enc;
+}
+'''
+                )
 
     def multiset(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
+            if self.vectorial:
+                file.write(
                 '''
 f4si *multiset(f4si *a){
     int i, j;
@@ -629,7 +738,8 @@ f4si *multiset(f4si *a){
     def multiset_multibind_forward(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
+            if self.vectorial:
+                file.write(
                 '''
 f4si *multiset_multibind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
     int i, j;
@@ -642,11 +752,26 @@ f4si *multiset_multibind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
 }
                 '''
             )
+            else:
+                file.write(
+                    '''
+float *multiset_multibind_forward(float *a, float *b, float* indices, float* enc){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < DIMENSIONS; j++){
+            enc[j] += a[(DIMENSIONS * i) + j] * b[(int)indices[i]* DIMENSIONS + j];
+        }
+    }
+    return enc;
+}
+                '''
+                )
 
     def multiset_multibind(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
+            if self.vectorial:
+                file.write(
                 '''
 f4si *multiset_multibind(f4si *a, f4si *b, f4si* enc){
     int i, j;
@@ -659,11 +784,26 @@ f4si *multiset_multibind(f4si *a, f4si *b, f4si* enc){
 }
                 '''
             )
+            else:
+                file.write(
+                '''
+float *multiset_multibind(float *a, float *b, float* enc){
+int i, j;
+for(i = 0; i < INPUT_DIM; ++i){
+    for(j = 0; j < DIMENSIONS; j++){
+         enc[j] += a[(DIMENSIONS * i) + j] * b[DIMENSIONS + j];
+    }
+}
+return enc;
+}
+            '''
+            )
 
     def multiset_forward(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
+            if self.vectorial:
+                file.write(
                 '''
 f4si *multiset_forward(f4si *a, float* indices){
     int i, j;
@@ -676,26 +816,64 @@ f4si *multiset_forward(f4si *a, float* indices){
 }
                 '''
             )
+            else:
+                file.write(
+                    '''
+float *multiset_forward(float *a, float* indices){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; i++){
+        for(j = 0; j < DIMENSIONS; ++j){
+            a[j] += a[(int)indices[i] * i + j];
+        }
+    }
+    return a;
+}
+                    '''
+                )
 
     def forward(self):
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
-                '''
+            if self.vectorial:
+                file.write(
+                    '''
 f4si *forward(f4si *a, float* indices, f4si* enc){
     int i, j;
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < NUM_BATCH; j++){
-            enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
+            if (indices[i] != padding){
+                enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
+            } else {
+                enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
+            }
         }
     }
     return enc;
 }              
-                ''')
+                        ''')
+            else:
+                file.write(
+                        '''
+float* forward(float *a, float* indices){
+    int i, j;
+    float* enc = calloc(DIMENSIONS * INPUT_DIM, sizeof(float));
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < DIMENSIONS; j++){
+           if (indices[i] != padding){
+               enc[(DIMENSIONS * i) + j] = a[((int)indices[i]* DIMENSIONS) + j];
+            } else {
+                enc[(DIMENSIONS * i) + j] *= 0;
+            }
+        }
+    }
+    return enc;
+}     
+                        ''')
 
     def permute(self):
-        for i in self.permutes:
-            with open(self.name.lower() + '.c', 'a') as file:
-                file.write(
+        if self.vectorial:
+            for i in self.permutes:
+                with open(self.name.lower() + '.c', 'a') as file:
+                    file.write(
                         '''
  f4si *permute'''+str(i)+'''(f4si* arr, int dd, int ini, int fi)
 {
@@ -733,6 +911,31 @@ f4si *forward(f4si *a, float* indices, f4si* enc){
                 '''
 
             )
+        else:
+            with open(self.name.lower() + '.c', 'a') as file:
+                file.write(
+                        '''
+float *permute(float* arr, int d, int ini, int fi, float *res)
+{
+    for (int i = ini; i < fi; i++){
+        if (d == 0){
+           for (int j = 0; j < DIMENSIONS; j++){
+                res[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+j];
+            }
+        } else {
+           for (int j = 0; j < DIMENSIONS; j++){
+                res[((i-ini)*DIMENSIONS)+j+d] = arr[(i*DIMENSIONS)+j];
+            }
+            for (int j = 0; j < d; j++){
+                res[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+DIMENSIONS-d+j];
+            }
+        }
+
+    }
+    return res;
+}
+                        '''
+                    )
 
     def define_hdc_functions(self):
         self.define_random_hv()
@@ -741,19 +944,25 @@ f4si *forward(f4si *a, float* indices, f4si* enc){
         self.multibind_forward()
         self.multiset()
         self.multiset_forward()
-        self.permute()
         self.multiset_multibind()
         self.multiset_multibind_forward()
+        self.forward()
+        self.permute()
+
         if self.ngram_perm != None:
-            self.generate_shuffle()
+            if self.vectorial:
+                self.generate_shuffle()
+
             self.ngram()
             self.ngram_forward()
+
         self.define_encoding_function()
 
     def define_random_hv(self):
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
-                '''
+            if self.vectorial:
+                file.write(
+                    '''
 f4si *random_hv(int size){
    f4si *arr = calloc(size * DIMENSIONS, sizeof(float));
    int P = 50;
@@ -767,13 +976,30 @@ f4si *random_hv(int size){
    }
    return arr;
 }
+                        '''
+                )
+            else:
+                file.write(
                     '''
-            )
+float *random_hv(int size){
+   float *arr = calloc(size * DIMENSIONS, sizeof(float));
+   int P = 50;
+   int i, j, k;
+   for (i = 0; i < size; i++){
+      for (j = 0; j < DIMENSIONS; j++){
+        arr[(i*DIMENSIONS)+j] = rand() % 100 > P ? 1 : -1;
+      }
+   }
+   return arr;
+}
+                        '''
+                    )
 
     def define_level_hv(self):
         with open(self.name.lower() + '.c', 'a') as file:
-            file.write(
-                '''
+            if self.vectorial:
+                file.write(
+                    '''
 f4si *level_hv(int levels){
     int levels_per_span = levels-1;
     int span = 1;
@@ -795,8 +1021,32 @@ f4si *level_hv(int levels){
     }
     return hv;
 }
+                        '''
+                )
+            else:
+                file.write(
                     '''
-            )
+float *level_hv(int levels){
+    int levels_per_span = levels-1;
+    int span = 1;
+    float *span_hv = random_hv(span+1);
+    float *threshold_hv = random_vector(span,0,1);
+    float *hv = calloc(levels * DIMENSIONS, sizeof(float));
+    int i, j, k;
+    for(i = 0; i < levels; i++){
+        float t = 1 - ((float)i / levels_per_span);
+        for(j = 0; j < DIMENSIONS; j++){
+            if((t > threshold_hv[j] || i == 0) && i != levels-1){
+                hv[i*DIMENSIONS+j] = span_hv[0*DIMENSIONS+j];
+            } else {
+                hv[i*DIMENSIONS+j] = span_hv[1*DIMENSIONS+j];
+            }   
+        }
+    }
+    return hv;
+}
+                        '''
+                )
 
     def define_encoding_function(self):
         with open(self.name.lower() + '.c', 'a') as file:

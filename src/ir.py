@@ -6,7 +6,7 @@ from ir_sequential import SequentialRepresentation
 class IntermediateRepresentation:
     def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun,
                  train_size, test_size, num_threads, vector_size, type, input_dim, high, basic, padding, permutes,\
-                 ngram, path, not_multiset):
+                 ngram, path, not_multiset, vectorial):
         self.name = name
         self.basic_name = self.get_basic_name(name)
         self.classes = classes
@@ -30,6 +30,7 @@ class IntermediateRepresentation:
         self.ngram = ngram
         self.path = path
         self.not_multiset = not_multiset
+        self.vectorial = vectorial
 
     def get_basic_name(self, name):
         temp = len(name)
@@ -42,13 +43,13 @@ class IntermediateRepresentation:
     def run(self):
         if self.type == Types.SEQUENTIAL:
             irSec = SequentialRepresentation(self.name, self.classes, self.dimensions, self.vars, self.weight_var, self.encoding, self.embeddings, self.debug, self.encoding_fun,
-                 self.train_size, self.test_size, self.num_threads, self.vector_size, self.type, self.input_dim, self.high, self.basic, self.padding, self.ngram, self.permutes)
+                 self.train_size, self.test_size, self.num_threads, self.vector_size, self.type, self.input_dim, self.high, self.basic, self.padding, self.ngram, self.permutes, self.vectorial)
             irSec.run_sequential()
         elif self.type == Types.PARALLEL:
             irPar = ParallelRepresentation(self.name, self.classes, self.dimensions, self.vars, self.weight_var,
                                            self.encoding, self.embeddings, self.debug, self.encoding_fun,
                  self.train_size, self.test_size, self.num_threads, self.vector_size, self.type,
-                 self.input_dim, self.high, self.basic, self.padding, self.permutes, self.ngram, self.path, self.not_multiset)
+                 self.input_dim, self.high, self.basic, self.padding, self.permutes, self.ngram, self.path, self.not_multiset, self.vectorial)
             irPar.run_parallel()
 
             ''''
