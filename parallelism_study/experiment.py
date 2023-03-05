@@ -13,15 +13,15 @@ folder = 'results/'
 out_file = sys.argv[1]
 
 dimensions = [10240]
-files = ['languages']
-#files = ['languages','mnist']
-train_size = [210032]
-#train_size = [210032, 60000]
-test_size = [21000]
-#test_size = [21000, 10000]
+#files = ['languages']
+files = ['languages','mnist']
+#train_size = [210032]
+train_size = [210032, 60000]
+#test_size = [21000]
+test_size = [21000, 10000]
 vector_size = 128
-num_threads = [16]
-type_exec = 'PARALLEL'
+num_threads = [1]
+type_exec = 'SEQUENTIAL'
 repetitions = 1
 
 position = 58
@@ -46,7 +46,7 @@ for index, file in enumerate(files):
             for dim in dimensions:
                 with open(file + ".hdcc", 'r') as f:
                     lines = f.readlines()
-                    lines = lines[:-7]
+                    lines = lines[:-8]
 
                 lines.append('.TYPE ' + str(type_exec) + ';\n')
                 lines.append('.NAME ' + str(fi).upper() + str(dim).upper() + ';\n')
@@ -55,6 +55,7 @@ for index, file in enumerate(files):
                 lines.append('.TEST_SIZE ' + str(test_size[index]) + ';\n')
                 lines.append('.NUM_THREADS ' + str(threads) + ';\n')
                 lines.append('.VECTOR_SIZE ' + str(vector_size) + ';\n')
+                lines.append('.VECTORIAL TRUE;\n')
 
                 with open(file + str(dim) +'.hdcc', 'w') as f:
                     f.writelines(lines)
