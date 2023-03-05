@@ -1,0 +1,2 @@
+Application,Dimensions,Time,Accuracy,Memory,Vectorial,Parallel
+languages,10240,7809.303327,0.962429,185984000,false,true
