@@ -1,0 +1,5 @@
+Application,Dimensions,Time,Accuracy,Memory
+voicehd,64,333.415912,0.555484 
+voicehd,128,352.020796,0.631815 
+voicehd,512,1000.840855,0.806928 
+voicehd,1024,1945.807352,0.813342 

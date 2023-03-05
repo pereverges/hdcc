@@ -1,0 +1,3 @@
+Application,Dimensions,Time,Accuracy,Memory
+mnist,64,1721.872432,0.663300 
+mnist,128,2588.113611,0.716300 

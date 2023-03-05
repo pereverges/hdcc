@@ -1,0 +1,7 @@
+Application,Dimensions,Time,Accuracy,Memory
+emgpppp,64,14.635760,0.748252 
+emgpppp,128,23.727950,0.818182 
+emgpppp,512,82.997865,0.972028 
+emgpppp,1024,161.519788,0.972028 
+emgpppp,4096,682.640373,0.965035 
+emgpppp,10240,1716.054840,0.972028 
