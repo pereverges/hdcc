@@ -163,7 +163,9 @@ class hdccAST:
                     self.multiset = True
                     enc += '\n    enc = ngram_forward(' + i[2] + ',indices,enc,' + str(i[3]) + ');'
                 else:
-                    enc += '\n    enc = ngram(' + i[2] + ',enc,' + str(i[3]) + ');'
+                    b, enc_aux, fun, varaibles = self.unpack_encoding(i[2], enc)
+                    enc += enc_aux
+                    enc += '\n    enc = ngram(' + b + ',enc,' + str(i[3]) + ');'
 
                 return 'enc', enc, '', ''
             elif i[1] == 'MULTIBUNDLE':
