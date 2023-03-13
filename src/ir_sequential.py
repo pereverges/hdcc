@@ -872,6 +872,13 @@ float* forward(float *a, float* indices){
                     ''')
 
     def permute(self):
+        '''
+            for (int i = ini; i < fi; i++){
+        memmove(res+((i-ini)*DIMENSIONS)+shift, arr+(i*DIMENSIONS), (DIMENSIONS-shift) * sizeof(*res));
+        memmove(res+((i-ini)*DIMENSIONS), arr+(i*DIMENSIONS)+(DIMENSIONS-shift), shift * sizeof(*res));
+    }
+    return res;
+                '''
         if self.vectorial:
             for i in self.permutes:
                 with open(self.name.lower() + '.c', 'a') as file:

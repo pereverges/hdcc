@@ -539,6 +539,30 @@ float *multibind_forward(float *a, float *b, float* indices, float* enc){
 
     def ngram(self):
         '''
+        f4si* ngram(f4si* arr, f4si* enc, const int d){
+            int i, j, k;
+            f4si aux;
+            f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+            f4si actual;
+            for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+                for (j = 0; j < NUM_BATCH; j++){
+                    for (k = 0; k < d; ++k){
+
+                            if (j < k){
+                                aux = forward_arr[(k*NUM_BATCH)+NUM_BATCH-k+j];
+                            } else {
+                                aux = forward_arr[k*NUM_BATCH+j-k];
+                            }
+                            actual = actual * aux;
+
+                      }
+                       enc[j] = enc[j] + actual;
+                }
+            }
+            free(forward_arr);
+            return enc;
+        }
+
         f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
             int i, j, k;
             f4si aux;
