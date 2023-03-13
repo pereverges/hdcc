@@ -573,6 +573,51 @@ float *multibind_forward(float *a, float *b, float* indices, float* enc){
                     for (k = 0; k < d; ++k){
                         if (k == 0){
                             for (int m = 0; m < d; m++){
+                                if (j == 0){
+                                    if (indices[i] != padding){
+                                        forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                    } else {
+                                        forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                    }
+                                } else {
+                                    if (m == d-1){
+                                        if (indices[i] != padding){
+                                            forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                        } else {
+                                            forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                        }
+                                    } else {
+                                        forward_arr[(m*NUM_BATCH)+j] = forward_arr[((m+1)*NUM_BATCH)+j];
+                                    }
+                                }
+                            }
+                            actual = forward_arr[k*NUM_BATCH+j];
+                        } else {
+                            if (j < k){
+                                aux = forward_arr[(k*NUM_BATCH)+NUM_BATCH-k+j];
+                            } else {
+                                aux = forward_arr[k*NUM_BATCH+j-k];
+                            }
+                            actual = actual * aux;
+                        }
+                      }
+                       enc[j] = enc[j] + actual;
+                }
+            }
+            free(forward_arr);
+            return enc;
+        }
+
+        f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
+            int i, j, k;
+            f4si aux;
+            f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+            f4si actual;
+            for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+                for (j = 0; j < NUM_BATCH; j++){
+                    for (k = 0; k < d; ++k){
+                        if (k == 0){
+                            for (int m = 0; m < d; m++){
                                 if (indices[i] != padding){
                                     forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
                                 } else {
