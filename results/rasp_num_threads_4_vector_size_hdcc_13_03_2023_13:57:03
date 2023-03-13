@@ -1,0 +1,6 @@
+Application,Dimensions,Time,Accuracy,Memory,Vectorial,Parallel
+emgp,10240,14.951093,0.987342,45984000,true,true
+emgpp,10240,12.195919,0.986486,45884000,true,true
+emgppp,10240,12.422119,0.993103,45868000,true,true
+emgpppp,10240,12.075929,0.972028,45828000,true,true
+emgppppp,10240,8.599219,0.970297,45428000,true,true

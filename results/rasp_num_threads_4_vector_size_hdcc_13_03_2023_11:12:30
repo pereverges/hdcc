@@ -1,0 +1,5 @@
+Application,Dimensions,Time,Accuracy,Memory,Vectorial,Parallel
+languages,32,4.775140,0.453667,10768000,true,true
+emgp,32,0.060235,0.962025,1768000,true,true
+emgpp,32,0.057030,0.871622,1824000,true,true
+emgppp,32,0.054950,0.813793,1728000,true,true
