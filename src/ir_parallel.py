@@ -976,7 +976,7 @@ float* forward(float *a, float* indices){
 
     def permute(self):
         '''
-        f4si *permute4(f4si* arr, int d, int ini, int fi)
+        f4si *permute(f4si* arr, int d, int ini, int fi)
         {
             int i, j, k;
             f4si *res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
