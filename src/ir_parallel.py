@@ -539,27 +539,24 @@ float *multibind_forward(float *a, float *b, float* indices, float* enc){
 
     def ngram(self):
         '''
-        f4si* ngram(f4si* arr, f4si* enc, const int d){
+        f4si* ngram(f4si* forward_arr, f4si* enc, const int d){
             int i, j, k;
             f4si aux;
-            f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
             f4si actual;
-            for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+
+            for (i = 0; i < (INPUT_DIM-(d)); ++i){
                 for (j = 0; j < NUM_BATCH; j++){
                     for (k = 0; k < d; ++k){
-
-                            if (j < k){
-                                aux = forward_arr[(k*NUM_BATCH)+NUM_BATCH-k+j];
-                            } else {
-                                aux = forward_arr[k*NUM_BATCH+j-k];
-                            }
-                            actual = actual * aux;
-
-                      }
-                       enc[j] = enc[j] + actual;
+                        if (k == 0){
+                            f4si actual = forward_arr[NUM_BATCH*(i)+j];
+                        } else {
+                            int shift = (j+k) % NUM_BATCH;
+                            actual = actual * forward_arr[NUM_BATCH*(i+k)+shift];
+                        }
+                  }
+                   enc[j] = enc[j] + actual;
                 }
             }
-            free(forward_arr);
             return enc;
         }
 
@@ -593,15 +590,11 @@ float *multibind_forward(float *a, float *b, float* indices, float* enc){
                             }
                             actual = forward_arr[k*NUM_BATCH+j];
                         } else {
-                            if (j < k){
-                                aux = forward_arr[(k*NUM_BATCH)+NUM_BATCH-k+j];
-                            } else {
-                                aux = forward_arr[k*NUM_BATCH+j-k];
-                            }
-                            actual = actual * aux;
+                            int shift = (j-k) % NUM_BATCH;
+                            actual = actual * forward_arr[NUM_BATCH*k+shift];
                         }
                       }
-                       enc[j] = enc[j] + actual;
+                      enc[j] = enc[j] + actual;
                 }
             }
             free(forward_arr);
@@ -725,65 +718,39 @@ float* ngram(float* arr, float* enc, const int d){
 f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
     int i, j, k;
     f4si aux;
-    f4si * forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+    f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
     f4si actual;
-    float n[d];
-    float p[d];
     for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
         for (j = 0; j < NUM_BATCH; j++){
             for (k = 0; k < d; ++k){
                 if (k == 0){
-                    if (j == NUM_BATCH-1){
-                        for (int m = 0; m < d; m++){
+                    for (int m = 0; m < d; m++){
+                        if (j == 0){
                             if (indices[i] != padding){
                                 forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
                             } else {
                                 forward_arr[(m*NUM_BATCH)+j] *= 0;
                             }
-                        }
-                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                       aux[k] = p[k];
-                   } else if (j == 0){
-                        for (int m = 0; m < d; m++){
-                            if (indices[i] != padding){
-                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                        } else {
+                            if (m == d-1){
+                                if (indices[i] != padding){
+                                    forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                } else {
+                                    forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                }
                             } else {
-                                forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                forward_arr[(m*NUM_BATCH)+j] = forward_arr[((m+1)*NUM_BATCH)+j];
                             }
                         }
-                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                       p[k] = aux[k];
-
-                   } else {
-                        for (int m = 0; m < d; m++){
-                            if (indices[i] != padding){
-                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
-                            } else {
-                                forward_arr[(m*NUM_BATCH)+j] *= 0;
-                            }
-                        }
-                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                       n[k] = aux[k];
-                       aux[k] = p[k];
-                       p[k] = n[k];
                     }
-                    actual = aux; 
-                } else if (k == d-1){
-                    actual = actual * forward_arr[k*NUM_BATCH+j];
+                    actual = forward_arr[k*NUM_BATCH+j];
                 } else {
-                       if (j == NUM_BATCH-1){
-                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                           aux[k] = p[k];
-                       } else if (j == 0){
-                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                           p[k] = aux[k];
-                       } else {
-                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                           n[k] = aux[k];
-                           aux[k] = p[k];
-                           p[k] = n[k];
-                       }
-                    actual = aux * actual;
+                    if (j < k){
+                        aux = forward_arr[(k*NUM_BATCH)+NUM_BATCH-k+j];
+                    } else {
+                        aux = forward_arr[k*NUM_BATCH+j-k];
+                    }
+                    actual = actual * aux;
                 }
               }
                enc[j] = enc[j] + actual;
