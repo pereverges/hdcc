@@ -6,7 +6,7 @@ from ir_sequential import SequentialRepresentation
 class IntermediateRepresentation:
     def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun,
                  train_size, test_size, num_threads, vector_size, type, input_dim, high, basic, padding, permutes,\
-                 ngram, path, not_multiset, vectorial):
+                 ngram, path, not_multiset, vectorial, performance):
         self.name = name
         self.basic_name = self.get_basic_name(name)
         self.classes = classes
@@ -31,6 +31,7 @@ class IntermediateRepresentation:
         self.path = path
         self.not_multiset = not_multiset
         self.vectorial = vectorial
+        self.performance = performance
 
     def get_basic_name(self, name):
         temp = len(name)
@@ -49,7 +50,7 @@ class IntermediateRepresentation:
             irPar = ParallelRepresentation(self.name, self.classes, self.dimensions, self.vars, self.weight_var,
                                            self.encoding, self.embeddings, self.debug, self.encoding_fun,
                  self.train_size, self.test_size, self.num_threads, self.vector_size, self.type,
-                 self.input_dim, self.high, self.basic, self.padding, self.permutes, self.ngram, self.path, self.not_multiset, self.vectorial)
+                 self.input_dim, self.high, self.basic, self.padding, self.permutes, self.ngram, self.path, self.not_multiset, self.vectorial, self.performance)
             irPar.run_parallel()
 
             ''''

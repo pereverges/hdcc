@@ -171,9 +171,14 @@ def p_encoding(p):
     p[0] = astDirective(action='ENCODING', params=[p.lineno(1), p[2]])
 
 
-def p_vecotrial(p):
+def p_vectorial(p):
     '''directive : VECTORIAL bool '''
     p[0] = astDirective(action='VECTORIAL', params=[p.lineno(1), p[2]])
+
+
+def p_performance(p):
+    '''directive : PERFORMANCE bool '''
+    p[0] = astDirective(action='PERFORMANCE', params=[p.lineno(1), p[2]])
 
 
 def p_var(p):
