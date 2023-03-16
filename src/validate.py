@@ -28,6 +28,7 @@ class hdccAST:
         self.padding = None
 
         self.vectorial = None
+        self.performance = None
         self.basic = True
         self.multiset = False
         self.multibind = False
@@ -37,7 +38,7 @@ class hdccAST:
     def get_ast_obj(self):
         return self.name, self.classes, self.dimensions, self.used_vars, self.weight, self.encoding, self.embeddings, self.debug, \
                self.encoding_fun, self.train_size, self.test_size, self.num_threads, self.vector_size, self.type,\
-               self.input_dim, self.high, self.basic, self.padding, self.permutes, self.ngram, self.multiset, self.vectorial
+               self.input_dim, self.high, self.basic, self.padding, self.permutes, self.ngram, self.multiset, self.vectorial, self.performance
 
     def validateDirective(self, x):
         action, params = self.astDirective.resolve(x)
@@ -47,7 +48,7 @@ class hdccAST:
         else:
             self.error_repeated_directive(action, params[0])
         if action == 'ENCODING':
-            if self.dimensions is not None and self.type is not None and self.vectorial is not None:
+            if self.dimensions is not None and self.type is not None and self.vectorial is not None and self.performance is not None:
                 self.wait = False
                 enc = ''
                 _, self.encoding, _, _ = self.unpack_encoding(params[1], enc)
@@ -79,7 +80,7 @@ class hdccAST:
             self.debug = True
         if action == 'DIMENSIONS':
             self.dimensions = params[1]
-            if self.wait is not None and self.type is not None and self.vectorial is not None:
+            if self.wait is not None and self.type is not None and self.vectorial is not None and self.performance is not None:
                 enc = ''
                 _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
                 self.encoding_build(self.encoding, self.encoding)
@@ -90,7 +91,7 @@ class hdccAST:
             self.test_size = params[1]
         if action == 'NUM_THREADS':
             self.num_threads = params[1]
-            if self.wait is not None and self.vectorial is not None:
+            if self.wait is not None and self.vectorial is not None and self.performance is not None:
                 enc = ''
                 _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
                 self.encoding_build(self.encoding, self.encoding)
@@ -106,12 +107,22 @@ class hdccAST:
             self.input_dim = params[1]
         if action == 'MODE':
             self.basic = params[1]
+        if action == 'PERFORMANCE':
+            if params[1] == 'TRUE':
+                self.performance = True
+            else:
+                self.performance = False
+            if self.wait is not None and self.vectorial is not None:
+                enc = ''
+                _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
+                self.encoding_build(self.encoding, self.encoding)
+                self.wait = None
         if action == 'VECTORIAL':
             if params[1] == 'TRUE':
                 self.vectorial = True
             else:
                 self.vectorial = False
-            if self.wait is not None:
+            if self.wait is not None and self.performance is not None:
                 enc = ''
                 _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
                 self.encoding_build(self.encoding, self.encoding)
