@@ -10,5 +10,6 @@
 .TRAIN_SIZE 6238;
 .TEST_SIZE 1559;
 .NAME       VOICEHD;
-.DIMENSIONS 1024; //printf("Hello There, pthread ID - %lu\n", pthread_self());
+.DIMENSIONS 1024;
 .VECTORIAL TRUE;
+.PERFORMANCE TRUE;
