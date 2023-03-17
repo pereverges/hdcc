@@ -1,5 +1,6 @@
 import math
 
+
 def generate(length, shift):
     s = ''
     length = int(length)
@@ -28,11 +29,14 @@ f4si shuffle(f4si arr, int d){
     '''
     return shuffle
 
-class SequentialRepresentation:
+
+class ParallelRepresentation:
     def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun,
-                 train_size, test_size, num_threads, vector_size, type, input_dim, high, basic, padding, ngram,
-                 permutes, vectorial):
-        self.name = name
+                 train_size, test_size, num_threads, vector_size, type, input_dim, high, basic, padding, permutes,
+                 ngram, path, not_multiset, vectorial, performance):
+        self.n = name
+        self.path = path
+        self.name = self.path + self.n
         self.basic_name = self.get_basic_name(name)
         self.classes = classes
         self.dimensions = dimensions
@@ -51,9 +55,11 @@ class SequentialRepresentation:
         self.high = high
         self.basic = basic
         self.padding = padding
-        self.ngram_perm = ngram
         self.permutes = permutes
+        self.ngram_perm = ngram
+        self.not_multiset = not_multiset
         self.vectorial = vectorial
+        self.performance = performance
 
     def get_basic_name(self, name):
         temp = len(name)
@@ -83,7 +89,7 @@ class SequentialRepresentation:
                     embedding += ("\n    " + str(i[1].upper() + " = random_hv(" + str(i[1]) + '_DIM' + ");"))
         return embedding
 
-    def run_sequential(self):
+    def run_parallel(self):
         self.makefile()
         self.define_header()
         self.define_dataset_loaders()
@@ -93,26 +99,28 @@ class SequentialRepresentation:
         self.general_main()
 
     def makefile(self):
-        doto = '.o'
+        dotc = '.c'
         import os
         cwd = os.getcwd()
         with open(str(cwd)+'/Makefile', 'w') as file:
             file.write('CC=clang' + '\n')
-            file.write(self.name + ': ' + self.name + doto + '\n')
-            file.write('\t$(CC) -o ' + self.name + ' ' + self.name + doto + ' -lm -O3\n')
+            file.write('all: ../src/thread_pool.c ../src/thread_pool.h ' + self.name + dotc + '\n')
+            file.write('\t$(CC) ../src/thread_pool.c ' + self.name + dotc + ' -lpthread -lm -O3 -o ' + self.name + '\n')
 
     def define_header(self):
-        self.define_includes()
+        self.define_include()
         self.define_constants()
 
-    def define_includes(self):
+    def define_include(self):
         with open(self.name.lower() + '.c', 'w') as file:
             file.write('/*********** ' + self.name + ' ***********/\n')
+            file.write('#include "../src/thread_pool.h"\n')
             file.write('#include <stdio.h>\n')
             file.write('#include <stdlib.h>\n')
             file.write('#include <stdint.h>\n')
             file.write('#include <string.h>\n')
             file.write('#include <math.h>\n')
+            file.write('#include <pthread.h>\n')
             if self.debug:
                 file.write('#include <time.h>\n')
             file.write('#ifndef max\n')
@@ -146,9 +154,13 @@ class SequentialRepresentation:
 
             file.write('#define BATCH ' + str(int(self.vector_size / 4)) + '\n')
             file.write('#define NUM_BATCH ' + str(int(self.dimensions / (self.vector_size / 4))) + '\n')
+            file.write('#define NUM_THREADS ' + str(self.num_threads) + '\n')
+            file.write('#define SPLIT_SIZE ' + str(math.floor(self.input_dim / self.num_threads)) + '\n')
             file.write('#define SIZE ' + str(math.floor(self.input_dim / self.num_threads) * self.num_threads) + '\n')
             file.write('#define HIGH ' + str(self.high) + '\n')
             file.write('int CORRECT_PREDICTIONS;\n')
+
+            file.write('ThreadPool *pool;\n')
 
             file.write('struct DataReader {\n')
             file.write('    char *path;\n')
@@ -258,6 +270,7 @@ void close_file(struct DataReader* data_reader){
                 '''
             )
 
+
     def define_math_functions(self):
         self.define_random_number()
         self.define_random_vector()
@@ -270,6 +283,7 @@ void close_file(struct DataReader* data_reader){
         self.define_argmax()
         self.define_map_range_clamp_one()
         self.define_hard_quantize()
+
 
     def define_random_number(self):
         with open(self.name.lower() + '.c', 'a') as file:
@@ -286,18 +300,18 @@ float get_rand(float low_bound, float high_bound){
             if self.vectorial:
                 file.write(
                     '''
-f4si *random_vector(int size, float low_bound, float high_bound){
-   f4si *arr = calloc(size * DIMENSIONS, sizeof(float));
-   int i, j, k;
-   for (i = 0; i < size; i++){
-      for (j = 0; j < NUM_BATCH; j++){
-         for(k = 0; k < BATCH; k++){
-            arr[i*NUM_BATCH+j][k] = get_rand(low_bound, high_bound);
-         }
-      }
-   }
-   return arr;
-}
+    f4si *random_vector(int size, float low_bound, float high_bound){
+       f4si *arr = calloc(size * DIMENSIONS, sizeof(float));
+       int i, j, k;
+       for (i = 0; i < size; i++){
+          for (j = 0; j < NUM_BATCH; j++){
+             for(k = 0; k < BATCH; k++){
+                arr[i*NUM_BATCH+j][k] = get_rand(low_bound, high_bound);
+             }
+          }
+       }
+       return arr;
+    }
                     '''
                 )
             else:
@@ -344,7 +358,9 @@ void update_weight(float* encoding, int feature){
             file.write(
                 '''
 void update_correct_predictions(){
+    lock_condition(pool);
     CORRECT_PREDICTIONS += 1;
+    unlock_condition(pool);
 }
                     '''
             )
@@ -459,22 +475,22 @@ void hard_quantize(float *arr, int size){
         with open(self.name.lower() + '.c', 'a') as file:
             if self.vectorial:
                 file.write(
-                    '''
-    f4si *multibind(f4si *a, f4si *b){
-        int i, j;
-        f4si *enc = (f4si *)calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
-        for(i = 0; i < INPUT_DIM; ++i){
-            for(j = 0; j < NUM_BATCH; j++){
-                 enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[NUM_BATCH + j];
-            }
+                '''
+f4si *multibind(f4si *a, f4si *b){
+    int i, j;
+    f4si *enc = (f4si *)calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+             enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[NUM_BATCH + j];
         }
-        return enc;
     }
-                    '''
-                )
+    return enc;
+}
+                '''
+            )
             else:
                 file.write(
-                    '''
+                '''
 float *multibind(float *a, float *b){
     int i, j;
     float *enc = (float *)calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
@@ -485,27 +501,30 @@ float *multibind(float *a, float *b){
     }
     return enc;
 }
-                    '''
-                )
+                '''
+            )
 
     def multibind_forward(self):
         """Binds a set of hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             if self.vectorial:
                 file.write(
-                    '''
-    f4si *multibind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
-        int i, j;
-        for(i = 0; i < INPUT_DIM; ++i){
-            for(j = 0; j < NUM_BATCH; j++){
-                enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[(int)indices[i]* NUM_BATCH + j];
+                '''
+f4si *multibind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            if (indices[i] != padding){
+                enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[((int)indices[i]*NUM_BATCH) + j];
+            } else {
+                enc[(NUM_BATCH * i) + j] *= 0;
             }
         }
-        return enc;
     }
-    
-                    '''
-                )
+    return enc;
+}
+                '''
+            )
             else:
                 file.write(
                 '''
@@ -513,7 +532,11 @@ float *multibind_forward(float *a, float *b, float* indices, float* enc){
     int i, j;
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < DIMENSIONS; j++){
-            enc[(DIMENSIONS * i) + j] = a[(DIMENSIONS * i) + j] * b[(int)indices[i]* DIMENSIONS + j];
+            if (indices[i] != padding){
+                enc[(DIMENSIONS * i) + j] = a[(DIMENSIONS * i) + j] * b[(int)indices[i]* DIMENSIONS + j];
+            } else {
+                enc[(DIMENSIONS * i) + j] *= 0;
+            }
         }
     }
     return enc;
@@ -523,11 +546,351 @@ float *multibind_forward(float *a, float *b, float* indices, float* enc){
             )
 
     def ngram(self):
+        '''
+f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
+    int i, j, k;
+    f4si aux;
+    f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+    f4si actual;
+    float m[d];
+    float p[d];
+    for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+        for (j = 0; j < NUM_BATCH; j++){
+            for (k = 0; k < d; ++k){
+                int shift = (j+(d-k-1)) % NUM_BATCH;
+                if (k == 0){
+                    for (int m = 0; m < d; m++){
+                        if (j == 0){
+                            if (indices[i] != padding){
+                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                            } else {
+                                forward_arr[(m*NUM_BATCH)+j] *= 0;
+                            }
+                        } else {
+                            if (m == d-1){
+                                if (indices[i] != padding){
+                                    forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                } else {
+                                    forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                }
+                            } else {
+                                forward_arr[(m*NUM_BATCH)+j] = forward_arr[((m+1)*NUM_BATCH)+j];
+                            }
+                        }
+                    }
+                    actual = forward_arr[j];
+                } else {
+                    if (j == NUM_BATCH-1){
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                       for (int s = 0; s < (d-k-1); s++){
+                          aux[s] = p[s];
+                       }
+                    } else if (j == 0){
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                      for (int s = 0; s < (d-k-1); s++){
+                          p[s] = aux[s];
+                          aux[s] = forward_arr[k*NUM_BATCH+NUM_BATCH-1][BATCH-(d-k-1)+s];
+                      }
+                    } else {
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                       for (int s = 0; s < (d-k-1); s++){
+                          m[s] = aux[s];
+                          aux[s] = p[s];
+                          p[s] = m[s];
+                       }
+                   }
+                   actual = actual * aux;
+                }
+              }
+              enc[j] = enc[j] + actual;
+        }
+    }
+    free(forward_arr);
+    return enc;
+}
+
+
+
+f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
+    int i, j, k;
+    f4si aux;
+    f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+    f4si actual;
+    float m[d];
+    float p[d];
+    for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+        for (j = 0; j < NUM_BATCH; j++){
+            for (k = 0; k < d; ++k){
+                int shift = (j+(d-k-1)) % NUM_BATCH;
+                if (k == 0){
+                    for (int m = 0; m < d; m++){
+                        if (j == 0){
+                            if (indices[i] != padding){
+                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                            } else {
+                                forward_arr[(m*NUM_BATCH)+j] *= 0;
+                            }
+                        } else {
+                            if (m == d-1){
+                                if (indices[i] != padding){
+                                    forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                } else {
+                                    forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                }
+                            } else {
+                                forward_arr[(m*NUM_BATCH)+j] = forward_arr[((m+1)*NUM_BATCH)+j];
+                            }
+                        }
+                    }
+                    actual = forward_arr[j];
+                } else {
+                    if (j == NUM_BATCH-1){
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                       for (int s = 0; s < (d-k-1); s++){
+                          aux[s] = p[s];
+                       }
+                    } else if (j == 0){
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                      for (int s = 0; s < (d-k-1); s++){
+                          p[s] = aux[s];
+                          aux[s] = forward_arr[k*NUM_BATCH+NUM_BATCH-1][BATCH-(d-k-1)+s];
+                      }
+                    } else {
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                       for (int s = 0; s < (d-k-1); s++){
+                          m[s] = aux[s];
+                          aux[s] = p[s];
+                          p[s] = m[s];
+                       }
+                   }
+                   actual = actual * aux;
+                }
+              }
+              enc[j] = enc[j] + actual;
+        }
+    }
+    free(forward_arr);
+    return enc;
+}
+
+
+
+f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
+    int i, j, k;
+    f4si aux;
+    f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+    f4si actual;
+    for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+        for (j = 0; j < NUM_BATCH; j++){
+            for (k = 0; k < d; ++k){
+                int shift = (j+(d-k-1)) % NUM_BATCH;
+                if (k == 0){
+                    for (int m = 0; m < d; m++){
+                        if (j == 0){
+                            if (indices[i] != padding){
+                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                            } else {
+                                forward_arr[(m*NUM_BATCH)+j] *= 0;
+                            }
+                        } else {
+                            if (m == d-1){
+                                if (indices[i] != padding){
+                                    forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                } else {
+                                    forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                }
+                            } else {
+                                forward_arr[(m*NUM_BATCH)+j] = forward_arr[((m+1)*NUM_BATCH)+j];
+                            }
+                        }
+                    }
+                    actual = forward_arr[shift];
+                } else {
+                    actual = actual * forward_arr[(NUM_BATCH*(k))+shift];
+                }
+              }
+              enc[j] = enc[j] + actual;
+        }
+    }
+    free(forward_arr);
+    return enc;
+}
+
+
+f4si* ngram(f4si* forward_arr, f4si* enc, const int d){
+    int i, j, k;
+    f4si aux;
+    f4si actual;
+    float m[d];
+    float p[d];
+    for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+        for (j = 0; j < NUM_BATCH; j++){
+            for (k = 0; k < d; ++k){
+                int shift = (j+(d-k-1)) % NUM_BATCH;
+                if (k == 0){
+                    actual = forward_arr[NUM_BATCH*(i)+shift];
+                } else {
+                    if (j == NUM_BATCH-1){
+                       aux = shuffle(forward_arr[(k+i)*NUM_BATCH+j], (d-k-1));
+                       for (int s = 0; s < (d-k-1); s++){
+                          aux[s] = p[s];
+                       }
+                    } else if (j == 0){
+                       aux = shuffle(forward_arr[(k+i)*NUM_BATCH+j], (d-k-1));
+                      for (int s = 0; s < (d-k-1); s++){
+                          p[s] = aux[s];
+                          aux[s] = forward_arr[(k+i)*NUM_BATCH+NUM_BATCH-1][BATCH-(d-k-1)+s];
+                      }
+                    } else {
+                       aux = shuffle(forward_arr[(k+i)*NUM_BATCH+j], (d-k-1));
+                       for (int s = 0; s < (d-k-1); s++){
+                          m[s] = aux[s];
+                          aux[s] = p[s];
+                          p[s] = m[s];
+                       }
+                   }
+                  actual = actual * aux;
+                }
+          }
+           enc[j] = enc[j] + actual;
+        }
+    }
+    return enc;
+}
+
+
+
+        f4si* ngram(f4si* forward_arr, f4si* enc, const int d){
+            int i, j, k;
+            f4si aux;
+            f4si actual;
+            for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+                for (j = 0; j < NUM_BATCH; j++){
+                    for (k = 0; k < d; ++k){
+                        int shift = (j+(d-k-1)) % NUM_BATCH;
+                        if (k == 0){
+                            actual = forward_arr[NUM_BATCH*(i)+shift];
+                        } else {
+                            actual = actual * forward_arr[(NUM_BATCH*(i+k))+shift];
+                        }
+                  }
+                   enc[j] = enc[j] + actual;
+                }
+            }
+            return enc;
+        }
+
+        f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
+            int i, j, k;
+            f4si aux;
+            f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+            f4si actual;
+            for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+                for (j = 0; j < NUM_BATCH; j++){
+                    for (k = 0; k < d; ++k){
+                        if (k == 0){
+                            for (int m = 0; m < d; m++){
+                                if (j == 0){
+                                    if (indices[i] != padding){
+                                        forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                    } else {
+                                        forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                    }
+                                } else {
+                                    if (m == d-1){
+                                        if (indices[i] != padding){
+                                            forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                        } else {
+                                            forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                        }
+                                    } else {
+                                        forward_arr[(m*NUM_BATCH)+j] = forward_arr[((m+1)*NUM_BATCH)+j];
+                                    }
+                                }
+                            }
+                            actual = forward_arr[k*NUM_BATCH+j];
+                        } else {
+                            int shift = (j-k) % NUM_BATCH;
+                            actual = actual * forward_arr[NUM_BATCH*k+shift];
+                        }
+                      }
+                      enc[j] = enc[j] + actual;
+                }
+            }
+            free(forward_arr);
+            return enc;
+        }
+
+        f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
+            int i, j, k;
+            f4si aux;
+            f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+            f4si actual;
+            for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+                for (j = 0; j < NUM_BATCH; j++){
+                    for (k = 0; k < d; ++k){
+                        int shift = (j+(d-k-1)) % NUM_BATCH;
+                        if (k == 0){
+                            for (int m = 0; m < d; m++){
+                                if (indices[i+m] != padding){
+                                    forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                } else {
+                                    forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                }
+                            }
+                            actual = forward_arr[shift];
+                        } else {
+                            actual = actual * forward_arr[(NUM_BATCH*(k))+shift];
+                        }
+                      }
+                      enc[j] = enc[j] + actual;
+                }
+            }
+            free(forward_arr);
+            return enc;
+        }
+
+        f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
+            int i, j, k;
+            f4si aux;
+            f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+            f4si actual;
+            for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+                for (j = 0; j < NUM_BATCH; j++){
+                    for (k = 0; k < d; ++k){
+                        if (k == 0){
+                            for (int m = 0; m < d; m++){
+                                if (indices[i] != padding){
+                                    forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                } else {
+                                    forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                }
+                            }
+                            actual = forward_arr[k*NUM_BATCH+j];
+                        } else {
+                            if (j < k){
+                                aux = forward_arr[(k*NUM_BATCH)+NUM_BATCH-k+j];
+                            } else {
+                                aux = forward_arr[k*NUM_BATCH+j-k];
+                            }
+                            actual = actual * aux;
+                        }
+                      }
+                       enc[j] = enc[j] + actual;
+                }
+            }
+            free(forward_arr);
+            return enc;
+        }
+
+        '''
+
         """Ngram a set of hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             if self.vectorial:
-                file.write(
-                    '''
+                if self.performance:
+                    file.write(
+                '''
 f4si* ngram(f4si* forward_arr, f4si* enc, const int d){
     int i, j, k;
     f4si aux;
@@ -547,8 +910,53 @@ f4si* ngram(f4si* forward_arr, f4si* enc, const int d){
     }
     return enc;
 }
-                    '''
-                )
+                '''
+            )
+                else:
+                    file.write(
+                     '''
+f4si* ngram(f4si* forward_arr, f4si* enc, const int d){
+    int i, j, k;
+    f4si aux;
+    f4si actual;
+    float m[d];
+    float p[d];
+    for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+        for (j = 0; j < NUM_BATCH; j++){
+            for (k = 0; k < d; ++k){
+                int shift = (j+(d-k-1)) % NUM_BATCH;
+                if (k == 0){
+                    actual = forward_arr[NUM_BATCH*(i)+shift];
+                } else {
+                    if (j == NUM_BATCH-1){
+                       aux = shuffle(forward_arr[(k+i)*NUM_BATCH+j], (d-k-1));
+                       for (int s = 0; s < (d-k-1); s++){
+                          aux[s] = p[s];
+                       }
+                    } else if (j == 0){
+                       aux = shuffle(forward_arr[(k+i)*NUM_BATCH+j], (d-k-1));
+                      for (int s = 0; s < (d-k-1); s++){
+                          p[s] = aux[s];
+                          aux[s] = forward_arr[(k+i)*NUM_BATCH+NUM_BATCH-1][BATCH-(d-k-1)+s];
+                      }
+                    } else {
+                       aux = shuffle(forward_arr[(k+i)*NUM_BATCH+j], (d-k-1));
+                       for (int s = 0; s < (d-k-1); s++){
+                          m[s] = aux[s];
+                          aux[s] = p[s];
+                          p[s] = m[s];
+                       }
+                   }
+                  actual = actual * aux;
+                }
+          }
+           enc[j] = enc[j] + actual;
+        }
+    }
+    return enc;
+}          
+                     '''
+                    )
             else:
                 file.write(
                     '''
@@ -579,80 +987,50 @@ float* ngram(float* arr, float* enc, const int d){
     def generate_shuffle(self):
         """Ngram a set of hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
-            if self.vectorial:
-                file.write(generate_shuffle(self.ngram_perm, self.vector_size))
+            file.write(generate_shuffle(self.ngram_perm, self.vector_size))
 
     def ngram_forward(self):
         """Ngram a set of hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             if self.vectorial:
-                file.write(
-                    '''
+                if self.performance:
+                    file.write(
+                '''
 f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
     int i, j, k;
     f4si aux;
-    f4si * forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+    f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
     f4si actual;
-    float n[d];
-    float p[d];
     for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
         for (j = 0; j < NUM_BATCH; j++){
             for (k = 0; k < d; ++k){
+                int shift = (j+(d-k-1)) % NUM_BATCH;
                 if (k == 0){
-                    if (j == NUM_BATCH-1){
-                        for (int m = 0; m < d; m++){
+                    for (int m = 0; m < d; m++){
+                        if (j == 0){
                             if (indices[i] != padding){
                                 forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
                             } else {
                                 forward_arr[(m*NUM_BATCH)+j] *= 0;
                             }
-                        }
-                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                       aux[k] = p[k];
-                   } else if (j == 0){
-                        for (int m = 0; m < d; m++){
-                            if (indices[i] != padding){
-                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                        } else {
+                            if (m == d-1){
+                                if (indices[i] != padding){
+                                    forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                } else {
+                                    forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                }
                             } else {
-                                forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                forward_arr[(m*NUM_BATCH)+j] = forward_arr[((m+1)*NUM_BATCH)+j];
                             }
                         }
-                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                       p[k] = aux[k];
-
-                   } else {
-                        for (int m = 0; m < d; m++){
-                            if (indices[i] != padding){
-                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
-                            } else {
-                                forward_arr[(m*NUM_BATCH)+j] *= 0;
-                            }
-                        }
-                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                       n[k] = aux[k];
-                       aux[k] = p[k];
-                       p[k] = n[k];
                     }
-                    actual = aux; 
-                } else if (k == d-1){
-                    actual = actual * forward_arr[k*NUM_BATCH+j];
+                    actual = forward_arr[shift];
                 } else {
-                       if (j == NUM_BATCH-1){
-                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                           aux[k] = p[k];
-                       } else if (j == 0){
-                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                           p[k] = aux[k];
-                       } else {
-                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                           n[k] = aux[k];
-                           aux[k] = p[k];
-                           p[k] = n[k];
-                       }
-                    actual = aux * actual;
+                    actual = actual * forward_arr[(NUM_BATCH*(k))+shift];
                 }
               }
-               enc[j] = enc[j] + actual;
+              enc[j] = enc[j] + actual;
         }
     }
     free(forward_arr);
@@ -660,6 +1038,72 @@ f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
 }
                 '''
             )
+                else:
+                    file.write(
+                        '''
+f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
+    int i, j, k;
+    f4si aux;
+    f4si *forward_arr = calloc(DIMENSIONS * d, sizeof(int));
+    f4si actual;
+    float m[d];
+    float p[d];
+    for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
+        for (j = 0; j < NUM_BATCH; j++){
+            for (k = 0; k < d; ++k){
+                int shift = (j+(d-k-1)) % NUM_BATCH;
+                if (k == 0){
+                    for (int m = 0; m < d; m++){
+                        if (j == 0){
+                            if (indices[i] != padding){
+                                forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                            } else {
+                                forward_arr[(m*NUM_BATCH)+j] *= 0;
+                            }
+                        } else {
+                            if (m == d-1){
+                                if (indices[i] != padding){
+                                    forward_arr[(m*NUM_BATCH)+j] = arr[(int)indices[i+m]* NUM_BATCH + j];
+                                } else {
+                                    forward_arr[(m*NUM_BATCH)+j] *= 0;
+                                }
+                            } else {
+                                forward_arr[(m*NUM_BATCH)+j] = forward_arr[((m+1)*NUM_BATCH)+j];
+                            }
+                        }
+                    }
+                    actual = forward_arr[j];
+                } else {
+                    if (j == NUM_BATCH-1){
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                       for (int s = 0; s < (d-k-1); s++){
+                          aux[s] = p[s];
+                       }
+                    } else if (j == 0){
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                      for (int s = 0; s < (d-k-1); s++){
+                          p[s] = aux[s];
+                          aux[s] = forward_arr[k*NUM_BATCH+NUM_BATCH-1][BATCH-(d-k-1)+s];
+                      }
+                    } else {
+                       aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
+                       for (int s = 0; s < (d-k-1); s++){
+                          m[s] = aux[s];
+                          aux[s] = p[s];
+                          p[s] = m[s];
+                       }
+                   }
+                   actual = actual * aux;
+                }
+              }
+              enc[j] = enc[j] + actual;
+        }
+    }
+    free(forward_arr);
+    return enc;
+}
+                        '''
+                    )
             else:
                 file.write(
                     '''
@@ -688,13 +1132,12 @@ float* ngram_forward(float* arr, float* indices, float* enc, const int d){
 '''
                 )
 
-
     def multiset(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             if self.vectorial:
                 file.write(
-                    '''
+                '''
 f4si *multiset(f4si *a){
     int i, j;
     for(i = 1; i < INPUT_DIM; i++){
@@ -704,40 +1147,30 @@ f4si *multiset(f4si *a){
     }
     return a;
 }
-                    '''
-                )
-            else:
-                file.write(
-            '''
-float *multiset(float *a){
-    int i, j;
-    for(i = 1; i < INPUT_DIM; i++){
-        for(j = 0; j < DIMENSIONS; ++j){
-            a[j] += a[(DIMENSIONS * i) + j];
-        }
-    }
-    return a;
-}
-            '''
-        )
+                '''
+            )
 
     def multiset_multibind_forward(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             if self.vectorial:
                 file.write(
-                    '''
+                '''
 f4si *multiset_multibind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
     int i, j;
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < NUM_BATCH; j++){
-            enc[j] += a[(NUM_BATCH * i) + j] * b[(int)indices[i]* NUM_BATCH + j];
+            if (indices[i] != padding){
+                enc[j] += a[(NUM_BATCH * i) + j] * b[(int)indices[i]* NUM_BATCH + j];
+            } else {
+                enc[j] *= a[(NUM_BATCH * i) + j] * 0;
+            }
         }
     }
     return enc;
 }
-                    '''
-                )
+                '''
+            )
             else:
                 file.write(
                     '''
@@ -753,13 +1186,12 @@ float *multiset_multibind_forward(float *a, float *b, float* indices, float* enc
                 '''
                 )
 
-
     def multiset_multibind(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             if self.vectorial:
                 file.write(
-                    '''
+                '''
 f4si *multiset_multibind(f4si *a, f4si *b, f4si* enc){
     int i, j;
     for(i = 0; i < INPUT_DIM; ++i){
@@ -769,40 +1201,44 @@ f4si *multiset_multibind(f4si *a, f4si *b, f4si* enc){
     }
     return enc;
 }
-                    '''
-                )
+                '''
+            )
             else:
                 file.write(
-                    '''
-float *multiset_multibind(float *a, float *b, float* enc){
-    int i, j;
-    for(i = 0; i < INPUT_DIM; ++i){
-        for(j = 0; j < DIMENSIONS; j++){
-             enc[j] += a[(DIMENSIONS * i) + j] * b[DIMENSIONS + j];
-        }
-    }
-    return enc;
-}
                 '''
-                )
+float *multiset_multibind(float *a, float *b, float* enc){
+int i, j;
+for(i = 0; i < INPUT_DIM; ++i){
+    for(j = 0; j < DIMENSIONS; j++){
+         enc[j] += a[(DIMENSIONS * i) + j] * b[DIMENSIONS + j];
+    }
+}
+return enc;
+}
+            '''
+            )
 
     def multiset_forward(self):
         """Bundles two hypervectors together"""
         with open(self.name.lower() + '.c', 'a') as file:
             if self.vectorial:
                 file.write(
-                    '''
+                '''
 f4si *multiset_forward(f4si *a, float* indices){
     int i, j;
     for(i = 0; i < INPUT_DIM; i++){
         for(j = 0; j < NUM_BATCH; ++j){
-            a[j] += a[(int)indices[i] * i + j];
+            if (indices[i] != padding){
+                a[j] += a[(int)indices[i] * DIMENSIONS + j];
+            } else {
+                a[j] += a[(int)indices[i] * DIMENSIONS + j]*0;
+            }
         }
     }
     return a;
 }
-                    '''
-                )
+                '''
+            )
             else:
                 file.write(
                     '''
@@ -836,10 +1272,10 @@ f4si *forward(f4si *a, float* indices, f4si* enc){
     }
     return enc;
 }              
-                    ''')
+                        ''')
             else:
                 file.write(
-                    '''
+                        '''
 float* forward(float *a, float* indices){
     int i, j;
     float* enc = calloc(DIMENSIONS * INPUT_DIM, sizeof(float));
@@ -854,22 +1290,36 @@ float* forward(float *a, float* indices){
     }
     return enc;
 }     
-                    ''')
+                        ''')
 
     def permute(self):
         '''
-            for (int i = ini; i < fi; i++){
-        memmove(res+((i-ini)*DIMENSIONS)+shift, arr+(i*DIMENSIONS), (DIMENSIONS-shift) * sizeof(*res));
-        memmove(res+((i-ini)*DIMENSIONS), arr+(i*DIMENSIONS)+(DIMENSIONS-shift), shift * sizeof(*res));
-    }
-    return res;
-                '''
+        f4si *permute(f4si* arr, int d, int ini, int fi)
+        {
+            int i, j, k;
+            f4si *res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+            for (i = 0; i < (fi-ini); ++i){
+                for (j = 0; j < NUM_BATCH; j++){
+                    if (j < d){
+                        res[(i*NUM_BATCH)+j] = arr[(i*NUM_BATCH)+NUM_BATCH-d+j];
+                    } else {
+                        res[(i*NUM_BATCH)+j] = arr[(i*NUM_BATCH)+j+d];
+                    }
+                }
+            }
+            free(arr);
+            return res;
+        }
+
+
+        '''
+
         if self.vectorial:
             for i in self.permutes:
                 with open(self.name.lower() + '.c', 'a') as file:
                     file.write(
                         '''
-f4si *permute''' + str(i) + '''(f4si* arr, int dd, int ini, int fi)
+ f4si *permute'''+str(i)+'''(f4si* arr, int dd, int ini, int fi)
 {
 
     int k, j, i;
@@ -880,20 +1330,17 @@ f4si *permute''' + str(i) + '''(f4si* arr, int dd, int ini, int fi)
     for (i = ini; i < fi; ++i){
       for (j = 0; j < NUM_BATCH; j++){
        if (j == NUM_BATCH-1){
-           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j]''' + generate(
-                        self.vector_size / 4, i) + ''');
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j]'''+generate(self.vector_size/4,i)+''');
            for (k = 0; k < dd; k++){
                res[i*NUM_BATCH+j][k] = p[k];
            }
        } else if (j == 0){
-           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j]''' + generate(
-                        self.vector_size / 4, i) + ''');
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j]'''+generate(self.vector_size/4,i)+''');
            for (k = 0; k < dd; k++){
                p[k] = res[i*NUM_BATCH+j][k];
            }
        } else {
-           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j]''' + generate(
-                        self.vector_size / 4, i) + ''');
+           res[i*NUM_BATCH+j] = __builtin_shufflevector(arr[i*NUM_BATCH+j],arr[i*NUM_BATCH+j]'''+generate(self.vector_size/4,i)+''');
            for (k = 0; k < dd; k++){
                n[k] = res[i*NUM_BATCH+j][k];
                res[i*NUM_BATCH+j][k] = p[k];
@@ -907,11 +1354,11 @@ f4si *permute''' + str(i) + '''(f4si* arr, int dd, int ini, int fi)
 }
                 '''
 
-                    )
+            )
         else:
             with open(self.name.lower() + '.c', 'a') as file:
                 file.write(
-                '''
+                        '''
 float *permute(float* arr, int d, int ini, int fi, float *res)
 {
     for (int i = ini; i < fi; i++){
@@ -931,25 +1378,28 @@ float *permute(float* arr, int d, int ini, int fi, float *res)
     }
     return res;
 }
-                '''
-                )
-
+                        '''
+                    )
 
     def define_hdc_functions(self):
         self.define_random_hv()
         self.define_level_hv()
-        self.forward()
         self.multibind()
         self.multibind_forward()
         self.multiset()
         self.multiset_forward()
-        self.permute()
         self.multiset_multibind()
         self.multiset_multibind_forward()
+        self.forward()
+        self.permute()
+
         if self.ngram_perm != None:
-            self.generate_shuffle()
+            if self.vectorial:
+                self.generate_shuffle()
+
             self.ngram()
             self.ngram_forward()
+
         self.define_encoding_function()
 
     def define_random_hv(self):
@@ -987,34 +1437,34 @@ float *random_hv(int size){
    return arr;
 }
                         '''
-                )
+                    )
 
     def define_level_hv(self):
         with open(self.name.lower() + '.c', 'a') as file:
             if self.vectorial:
                 file.write(
                     '''
-    f4si *level_hv(int levels){
-        int levels_per_span = levels-1;
-        int span = 1;
-        f4si *span_hv = random_hv(span+1);
-        f4si *threshold_hv = random_vector(span,0,1);
-        f4si *hv = calloc(levels * DIMENSIONS, sizeof(float));
-        int i, j, k;
-        for(i = 0; i < levels; i++){
-            float t = 1 - ((float)i / levels_per_span);
-            for(j = 0; j < NUM_BATCH; j++){
-                for(k = 0; k < BATCH; k++){
-                    if((t > threshold_hv[j][k] || i == 0) && i != levels-1){
-                        hv[i*NUM_BATCH+j][k] = span_hv[0*NUM_BATCH+j][k];
-                    } else {
-                        hv[i*NUM_BATCH+j][k] = span_hv[1*NUM_BATCH+j][k];
-                    }
-                 }
-            }
+f4si *level_hv(int levels){
+    int levels_per_span = levels-1;
+    int span = 1;
+    f4si *span_hv = random_hv(span+1);
+    f4si *threshold_hv = random_vector(span,0,1);
+    f4si *hv = calloc(levels * DIMENSIONS, sizeof(float));
+    int i, j, k;
+    for(i = 0; i < levels; i++){
+        float t = 1 - ((float)i / levels_per_span);
+        for(j = 0; j < NUM_BATCH; j++){
+            for(k = 0; k < BATCH; k++){
+                if((t > threshold_hv[j][k] || i == 0) && i != levels-1){
+                    hv[i*NUM_BATCH+j][k] = span_hv[0*NUM_BATCH+j][k];
+                } else {
+                    hv[i*NUM_BATCH+j][k] = span_hv[1*NUM_BATCH+j][k];
+                }
+             }
         }
-        return hv;
     }
+    return hv;
+}
                         '''
                 )
             else:
@@ -1046,6 +1496,21 @@ float *level_hv(int levels){
         with open(self.name.lower() + '.c', 'a') as file:
             file.write(self.encoding_fun)
 
+    def define_encoding_train(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            file.write(
+                '''
+void encode_function_train(float* train_data, int label){
+    for (int i = 0; i < NUM_THREADS; i++) {
+        struct EncodeTaskTrain *task = (struct EncodeTaskTrain *)calloc(1, sizeof(struct EncodeTaskTrain));
+        task -> split_start = i*SPLIT_SIZE;
+        task -> data = train_data;
+        task -> label = label;
+        mt_add_job(pool, &encode_fun_train, task);
+    }
+}
+                ''')
+
     def define_train_and_test(self):
         self.define_train_loop()
         self.define_test_loop()
@@ -1060,8 +1525,9 @@ void train_loop(){
         struct Task *task = (struct Task *)calloc(1,sizeof(struct Task));
         task -> data = load_data_next_line(train_data);
         task -> label = load_labels_next_line(train_labels);
-        encode_train_task(task);
+        mt_add_job(pool, &encode_train_task, task);
     }
+    mt_join(pool);
     normalize();
 }
                     '''
@@ -1077,11 +1543,12 @@ float test_loop(){
         struct Task *task = (struct Task *)calloc(1,sizeof(struct Task));
         task -> data = load_data_next_line(test_data);
         task -> label = load_labels_next_line(test_labels);
-        encode_test_task(task);
+        mt_add_job(pool, &encode_test_task, task);
     }
+    mt_join(pool);
     return CORRECT_PREDICTIONS/(float)TEST;
 }
-                '''
+                    '''
             )
 
     def general_main(self):
@@ -1089,11 +1556,13 @@ float test_loop(){
             file.write(
                 '''
 int main(int argc, char **argv) {
+    srand(time(NULL));
     '''
                 +
                 str(self.define_embeddings())
                 +
                 '''
+    pool = mt_create_pool(NUM_THREADS);
     weights();
     prepare_to_load_data(argv);
     '''
@@ -1118,7 +1587,7 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = end.tv_sec - begin.tv_sec;
     elapsed += (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
-    printf("''' + self.basic_name + ''',%d,%f,%f \\n", DIMENSIONS,elapsed, acc);
+    printf("''' + self.basic_name + ''',%d,%f,%f", DIMENSIONS,elapsed, acc);
                     '''
                 )
             else:
@@ -1133,3 +1602,43 @@ int main(int argc, char **argv) {
 }              
                 '''
             )
+
+
+
+
+
+'''
+f4si *permute(f4si* arr, int d, int ini, int fi)
+{
+    int i, j, k;
+    f4si *res = calloc(DIMENSIONS*(fi-ini), sizeof(int));
+    for (i = 0; i < (fi-ini); ++i){
+        for (j = 0; j < NUM_BATCH; j++){
+            int shift = (j+d) % NUM_BATCH;
+            res[(i*NUM_BATCH)+j] = arr[((i+ini)*NUM_BATCH)+shift];
+        }
+    }
+    //free(arr);
+    return res;
+}
+
+
+f4si* ngram(f4si* arr, f4si* enc, const int d){
+    int i, j, k;
+
+    //float* res = calloc(DIMENSIONS * (INPUT_DIM-(d-1)), sizeof(float));
+    f4si* sample = calloc(DIMENSIONS * (INPUT_DIM-(d-1)), sizeof(float));
+    f4si* ng = calloc(DIMENSIONS * (INPUT_DIM-(d-1)), sizeof(float));
+
+    ng = permute(arr, d-1, 0, (INPUT_DIM-(d-1)));
+    for (i = 1; i < d; i++){
+        sample = permute(arr, d-i-1, i, (INPUT_DIM-(d-i-1)));
+        ng = multibind(ng,sample,(INPUT_DIM-(d-1)));
+    }
+
+    enc = multiset(ng, (INPUT_DIM-(d-1)));
+    free(sample);
+    //free(ng);
+    return enc;
+}
+'''
