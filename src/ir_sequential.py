@@ -528,38 +528,23 @@ float *multibind_forward(float *a, float *b, float* indices, float* enc){
             if self.vectorial:
                 file.write(
                     '''
-f4si* ngram(f4si* arr, f4si* enc, const int d){
+f4si* ngram(f4si* forward_arr, f4si* enc, const int d){
     int i, j, k;
     f4si aux;
-    f4si * forward_arr = calloc(DIMENSIONS * d, sizeof(int));
     f4si actual;
-    float n[d];
-    float p[d];
     for (i = 0; i < (INPUT_DIM-(d-1)); ++i){
         for (j = 0; j < NUM_BATCH; j++){
             for (k = 0; k < d; ++k){
-                if (k == d-1){
-                    actual = actual * forward_arr[k*NUM_BATCH+j];
+                int shift = (j+(d-k-1)) % NUM_BATCH;
+                if (k == 0){
+                    actual = forward_arr[NUM_BATCH*(i)+shift];
                 } else {
-                       if (j == NUM_BATCH-1){
-                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                           aux[k] = p[k];
-                       } else if (j == 0){
-                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                           p[k] = aux[k];
-                       } else {
-                           aux = shuffle(forward_arr[k*NUM_BATCH+j], (d-k-1));
-                           n[k] = aux[k];
-                           aux[k] = p[k];
-                           p[k] = n[k];
-                       }
-                    actual = aux * actual;
+                    actual = actual * forward_arr[(NUM_BATCH*(i+k))+shift];
                 }
-              }
-               enc[j] = enc[j] + actual;
+          }
+           enc[j] = enc[j] + actual;
         }
     }
-    free(forward_arr);
     return enc;
 }
                     '''

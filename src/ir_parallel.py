@@ -1373,7 +1373,7 @@ float *permute(float* arr, int d, int ini, int fi, float *res)
             for (int j = 0; j < d; j++){
                 res[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+DIMENSIONS-d+j];
             }
-        }
+        } 
 
     }
     return res;
