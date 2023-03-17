@@ -1,0 +1,13 @@
+Application,Dimensions,Time,Accuracy,Memory,Vectorial,Parallel,Performance
+languages,10240,759.669414,0.959381,124660000,true,true,true
+languages,10240,665.060521,0.691190,125756000,true,true,false
+emgp,10240,34.931383,0.974684,208572000,true,true,true
+emgp,10240,36.246345,0.974684,208552000,true,true,false
+emgpp,10240,32.227381,0.993243,208532000,true,true,true
+emgpp,10240,33.845141,0.993243,208452000,true,true,false
+emgppp,10240,31.682437,1.000000,208456000,true,true,true
+emgppp,10240,34.509498,0.993103,208512000,true,true,false
+emgpppp,10240,34.522384,0.972028,208568000,true,true,true
+emgpppp,10240,36.080881,0.972028,208516000,true,true,false
+emgppppp,10240,24.359915,0.960396,207992000,true,true,true
+emgppppp,10240,25.613831,0.940594,208036000,true,true,false
