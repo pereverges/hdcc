@@ -79,6 +79,7 @@ Compiler description for the Voicehd application.
 Steps to execute the voicehd application:
 
 ```
+cd examples
 python3 ../src/main.py voicehd.hdcc
 make
 ./voicehd ../data/ISOLET/isolet_train_data ../data/ISOLET/isolet_train_labels ../data/ISOLET/isolet_test_data ../data/ISOLET/isolet_test_labels 

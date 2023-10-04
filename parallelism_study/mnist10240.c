@@ -1,9 +1,11 @@
 /*********** mnist10240 ***********/
+#include "../src/thread_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <pthread.h>
 #include <time.h>
 #ifndef max
 #define max(a,b) (((a) > (b)) ? (a) : (b))
@@ -12,8 +14,8 @@
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 #endif
 /*********** CONSTANTS ***********/
-#define TRAIN 210032
-#define TEST 21000
+#define TRAIN 60000
+#define TEST 10000
 #define DIMENSIONS 10240
 #define CLASSES 10
 #define VECTOR_SIZE 128
@@ -26,9 +28,12 @@ f4si* VALUE;
 #define VALUE_DIM 784
 #define BATCH 32
 #define NUM_BATCH 320
+#define NUM_THREADS 1
+#define SPLIT_SIZE 784
 #define SIZE 784
 #define HIGH 1
 int CORRECT_PREDICTIONS;
+ThreadPool *pool;
 struct DataReader {
     char *path;
     FILE *fp;
@@ -97,19 +102,19 @@ float get_rand(float low_bound, float high_bound){
     return (float) ((float)rand() / (float)RAND_MAX) * (high_bound - low_bound) + low_bound;
 }
                 
-f4si *random_vector(int size, float low_bound, float high_bound){
-   f4si *arr = calloc(size * DIMENSIONS, sizeof(float));
-   int i, j, k;
-   for (i = 0; i < size; i++){
-      for (j = 0; j < NUM_BATCH; j++){
-         for(k = 0; k < BATCH; k++){
-            arr[i*NUM_BATCH+j][k] = get_rand(low_bound, high_bound);
-         }
-      }
-   }
-   return arr;
-}
-                
+    f4si *random_vector(int size, float low_bound, float high_bound){
+       f4si *arr = calloc(size * DIMENSIONS, sizeof(float));
+       int i, j, k;
+       for (i = 0; i < size; i++){
+          for (j = 0; j < NUM_BATCH; j++){
+             for(k = 0; k < BATCH; k++){
+                arr[i*NUM_BATCH+j][k] = get_rand(low_bound, high_bound);
+             }
+          }
+       }
+       return arr;
+    }
+                    
 void weights(){
     WEIGHT = (float *)calloc(CLASSES * DIMENSIONS, sizeof(float));
 }
@@ -122,7 +127,9 @@ void update_weight(float* encoding, int feature){
 }
                     
 void update_correct_predictions(){
+    lock_condition(pool);
     CORRECT_PREDICTIONS += 1;
+    unlock_condition(pool);
 }
                     
 float* linear(float* m){
@@ -207,7 +214,7 @@ f4si *random_hv(int size){
    }
    return arr;
 }
-                    
+                        
 f4si *level_hv(int levels){
     int levels_per_span = levels-1;
     int span = 1;
@@ -229,7 +236,7 @@ f4si *level_hv(int levels){
     }
     return hv;
 }
-                    
+                        
 f4si *multibind(f4si *a, f4si *b){
     int i, j;
     f4si *enc = (f4si *)calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
@@ -245,12 +252,15 @@ f4si *multibind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
     int i, j;
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < NUM_BATCH; j++){
-            enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[(int)indices[i]* NUM_BATCH + j];
+            if (indices[i] != padding){
+                enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[((int)indices[i]*NUM_BATCH) + j];
+            } else {
+                enc[(NUM_BATCH * i) + j] *= 0;
+            }
         }
     }
     return enc;
 }
-
                 
 f4si *multiset(f4si *a){
     int i, j;
@@ -266,7 +276,11 @@ f4si *multiset_forward(f4si *a, float* indices){
     int i, j;
     for(i = 0; i < INPUT_DIM; i++){
         for(j = 0; j < NUM_BATCH; ++j){
-            a[j] += a[(int)indices[i] * i + j];
+            if (indices[i] != padding){
+                a[j] += a[(int)indices[i] * DIMENSIONS + j];
+            } else {
+                a[j] += a[(int)indices[i] * DIMENSIONS + j]*0;
+            }
         }
     }
     return a;
@@ -286,12 +300,30 @@ f4si *multiset_multibind_forward(f4si *a, f4si *b, float* indices, f4si* enc){
     int i, j;
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < NUM_BATCH; j++){
-            enc[j] += a[(NUM_BATCH * i) + j] * b[(int)indices[i]* NUM_BATCH + j];
+            if (indices[i] != padding){
+                enc[j] += a[(NUM_BATCH * i) + j] * b[(int)indices[i]* NUM_BATCH + j];
+            } else {
+                enc[j] *= a[(NUM_BATCH * i) + j] * 0;
+            }
         }
     }
     return enc;
 }
                 
+f4si *forward(f4si *a, float* indices, f4si* enc){
+    int i, j;
+    for(i = 0; i < INPUT_DIM; ++i){
+        for(j = 0; j < NUM_BATCH; j++){
+            if (indices[i] != padding){
+                enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
+            } else {
+                enc[(NUM_BATCH * i) + j] = a[(int)indices[i]* NUM_BATCH + j];
+            }
+        }
+    }
+    return enc;
+}              
+                        
 void encode_train_task(void* task){
     float* data = ((struct Task*)task) -> data;
     int label = ((struct Task*)task) -> label;
@@ -307,7 +339,7 @@ void encode_train_task(void* task){
     free(data);
 }
 
-        
+
 void encode_test_task(void* task){
     float* data = ((struct Task*)task) -> data;
     int label = ((struct Task*)task) -> label;
@@ -325,15 +357,16 @@ void encode_test_task(void* task){
     free(data);
     free(enc);
 }
-                                    
+                            
 void train_loop(){
     int i;
     for(i = 0; i < TRAIN; i++){
         struct Task *task = (struct Task *)calloc(1,sizeof(struct Task));
         task -> data = load_data_next_line(train_data);
         task -> label = load_labels_next_line(train_labels);
-        encode_train_task(task);
+        mt_add_job(pool, &encode_train_task, task);
     }
+    mt_join(pool);
     normalize();
 }
                     
@@ -343,15 +376,18 @@ float test_loop(){
         struct Task *task = (struct Task *)calloc(1,sizeof(struct Task));
         task -> data = load_data_next_line(test_data);
         task -> label = load_labels_next_line(test_labels);
-        encode_test_task(task);
+        mt_add_job(pool, &encode_test_task, task);
     }
+    mt_join(pool);
     return CORRECT_PREDICTIONS/(float)TEST;
 }
-                
+                    
 int main(int argc, char **argv) {
+    srand(time(NULL));
     
     POSITION = level_hv(POSITION_DIM);
     VALUE = random_hv(VALUE_DIM);
+    pool = mt_create_pool(NUM_THREADS);
     weights();
     prepare_to_load_data(argv);
     
@@ -365,7 +401,7 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed = end.tv_sec - begin.tv_sec;
     elapsed += (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
-    printf("mnist,%d,%f,%f \n", DIMENSIONS,elapsed, acc);
+    printf("mnist,%d,%f,%f", DIMENSIONS,elapsed, acc);
                     
 }              
                 

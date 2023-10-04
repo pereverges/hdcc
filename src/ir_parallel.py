@@ -1149,6 +1149,20 @@ f4si *multiset(f4si *a){
 }
                 '''
             )
+            else:
+                file.write(
+                    '''
+float *multiset(float *a){
+    int i, j;
+    for(i = 1; i < INPUT_DIM; i++){
+        for(j = 0; j < DIMENSIONS; ++j){
+            a[j] += a[(DIMENSIONS * i) + j];
+        }
+    }
+    return a;
+}
+                    '''
+                )
 
     def multiset_multibind_forward(self):
         """Bundles two hypervectors together"""

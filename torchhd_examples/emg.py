@@ -36,11 +36,12 @@ class Model(nn.Module):
         self.classify.weight.data.fill_(0.0)
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
-        signal = self.signals(x)
-        samples = functional.bind(signal, self.channels.weight.unsqueeze(0))
-        samples = functional.bind(samples, self.timestamps.weight.unsqueeze(1))
+        samples = self.signals(self.flatten(x))
 
-        samples = functional.multiset(samples)
+        #samples = functional.bind(signal, self.channels.weight.unsqueeze(0))
+        #samples = functional.bind(signal, self.timestamps.weight.unsqueeze(1))
+
+        #samples = functional.multiset(samples)
         sample_hv = functional.ngrams(samples, n=N_GRAM_SIZE)
         return functional.hard_quantize(sample_hv)
 

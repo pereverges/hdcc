@@ -181,6 +181,11 @@ def p_performance(p):
     p[0] = astDirective(action='PERFORMANCE', params=[p.lineno(1), p[2]])
 
 
+def p_simple(p):
+    '''directive : SIMPLE bool '''
+    p[0] = astDirective(action='SIMPLE', params=[p.lineno(1), p[2]])
+
+
 def p_var(p):
     ''' expression : ID'''
     p[0] = p[1].upper()

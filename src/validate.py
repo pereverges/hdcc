@@ -15,6 +15,7 @@ class hdccAST:
         self.dimensions = None
         self.wait = None
         self.debug = False
+        self.simple = False
 
         self.permutes = []
 
@@ -107,6 +108,11 @@ class hdccAST:
             self.input_dim = params[1]
         if action == 'MODE':
             self.basic = params[1]
+        if action == 'SIMPLE':
+            if params[1] == 'TRUE':
+                self.simple = True
+            else:
+                self.simple = False
         if action == 'PERFORMANCE':
             if params[1] == 'TRUE':
                 self.performance = True
@@ -114,7 +120,10 @@ class hdccAST:
                 self.performance = False
             if self.wait is not None and self.vectorial is not None:
                 enc = ''
-                _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
+                if self.simple:
+                    _, self.encoding, _, _ = self.unpack_encoding_simple(self.wait, enc)
+                else:
+                    _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
                 self.encoding_build(self.encoding, self.encoding)
                 self.wait = None
         if action == 'VECTORIAL':
@@ -124,7 +133,10 @@ class hdccAST:
                 self.vectorial = False
             if self.wait is not None and self.performance is not None:
                 enc = ''
-                _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
+                if self.simple:
+                    _, self.encoding, _, _ = self.unpack_encoding_simple(self.wait, enc)
+                else:
+                    _, self.encoding, _, _ = self.unpack_encoding(self.wait, enc)
                 self.encoding_build(self.encoding, self.encoding)
                 self.wait = None
 
@@ -196,6 +208,67 @@ class hdccAST:
                     return self.weight, enc, '', ''
                 return i.upper(), enc, '', ''
 
+    def unpack_encoding_simple(self, i, enc):
+        if self.basic:
+            if i[1] == 'MULTIBIND':
+                self.multibind = True
+                if i[3] == self.weight:
+                    b1, enc1, _, _ = self.unpack_encoding_simple(i[2],enc)
+                    b2, enc2, _, _ = self.unpack_encoding_simple(i[3],enc)
+                    enc += enc1 + enc2
+                    enc += '\n    enc = multibind_forward(' + b1 + ',' + b2 + ', indices, enc' + ');'
+                    return 'enc', enc, 'bind_forward', [b1,b2]
+                elif i[2] == self.weight:
+                    b1, enc1, _, _ = self.unpack_encoding_simple(i[2], enc)
+                    b2, enc2, _, _ = self.unpack_encoding_simple(i[3], enc)
+                    enc += enc1 + enc2
+                    enc += '\n    enc = multibind_forward(' + b2 + ',' + b1 + ', indices, enc' + ');'
+                    return 'enc', enc, 'bind_forward', [b2, b1]
+                else:
+                    b1, enc1, _, _ = self.unpack_encoding_simple(i[2],enc)
+                    b2, enc2, _, _ = self.unpack_encoding_simple(i[3],enc)
+                    enc += enc1 + enc2
+                    enc += '\n    enc = multibind(' + b1 + ',' + b2 + ', enc);'
+                    return 'enc', enc, 'bind', [b1,b2]
+            elif i[1] == 'BUNDLE':
+                return '    bundle(' + self.unpack_encoding_simple(i[1][2]) + ')', '', 'bundle'
+            elif i[1] == 'PERMUTE':
+                b, enc_aux, _, _ = self.unpack_encoding_simple(i[2], enc)
+                enc += enc_aux
+                self.permutes += [i[3]]
+                if self.vectorial:
+                    enc += '\n    enc = permute'+str(i[3])+'(' + b + ',' + str(i[3]) + ',0,1);'
+                else:
+                    enc += '\n    permute(' + b + ',' + str(i[3]) + ',0,1, enc);'
+                return 'enc', enc, '', ''
+            elif i[1] == 'NGRAM':
+                b, enc_aux, _, _ = self.unpack_encoding_simple(i[2], enc)
+                enc += enc_aux
+                # THIS IN NGRAM FORWARD, CREATE NGRAM NORMAL
+                if self.ngram != None:
+                    if self.ngram < i[3]:
+                        self.ngram = i[3]
+                else:
+                    self.ngram = i[3]
+                if i[2] == self.weight:
+                    self.multiset = True
+                    enc += '\n    enc = ngram_forward(' + i[2] + ',indices,enc,' + str(i[3]) + ');'
+                else:
+                    enc += '\n    enc = ngram(' + b + ',enc,' + str(i[3]) + ');'
+
+                return 'enc', enc, '', ''
+            elif i[1] == 'MULTIBUNDLE':
+                self.multiset = True
+                b, enc_aux, fun, varaibles = self.unpack_encoding_simple(i[2], enc)
+                enc += enc_aux
+                enc += '\n    enc = multiset(' + b + ');\n'
+                return 'enc', enc, '', ''
+            else:
+                self.set_used_var(i)
+                if i == self.weight:
+                    return self.weight, enc, '', ''
+                return i.upper(), enc, '', ''
+
     def set_used_var(self, var):
         self.used_vars.add(var)
 
@@ -227,7 +300,10 @@ class hdccAST:
             self.encoding_build_parallel(var)
 
     def encoding_build_sequential(self,var,t):
-        space = 'DIMENSIONS'
+        if self.simple:
+            space = 'DIMENSIONS*INPUT_DIM'
+        else:
+            space = 'DIMENSIONS'
         if self.multiset == False:
             space += '*INPUT_DIM'
         fun_head_train = '''
@@ -273,7 +349,10 @@ void encode_test_task(void* task){'''
                                     '''
 
     def encoding_build_parallel(self, var):
-        space = 'DIMENSIONS'
+        if self.simple:
+            space = 'DIMENSIONS*INPUT_DIM'
+        else:
+            space = 'DIMENSIONS'
         if self.multiset == False:
             space += '*INPUT_DIM'
         fun_head_train = '''
