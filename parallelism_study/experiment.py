@@ -198,4 +198,4 @@ for index, file in enumerate(files):
                                         res += ","+str(threads)+'\n'
                                         output.writelines(res)
                                 except:
-                                    output.writelines("ERROR, TYPE: " + type + " VECTORIAL: " + vectorial + " SIMPLE: " + simple + " PERFORMANCE " + performace)
+                                    output.writelines("ERROR, TYPE: " + type + " VECTORIAL: " + vectorial + " SIMPLE: " + simple + " PERFORMANCE " + performance)
