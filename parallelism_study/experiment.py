@@ -75,125 +75,127 @@ for index, file in enumerate(files):
 
                                 with open(file + str(dim) +'.hdcc', 'w') as f:
                                     f.writelines(lines)
+                                try:
+                                    os.system('python3 ../src/main.py ' + str(file) + str(dim) +'.hdcc')
+                                    with open(folder+out_file+now, "a") as output:
+                                        subprocess.check_output('make')
+                                        DEVNULL = open(os.devnull, 'wb', 0)
 
-                                os.system('python3 ../src/main.py ' + str(file) + str(dim) +'.hdcc')
-                                with open(folder+out_file+now, "a") as output:
-                                    subprocess.check_output('make')
-                                    DEVNULL = open(os.devnull, 'wb', 0)
+                                        if fi == 'mnist':
+                                            res = subprocess.check_output(["./"+str(file) + str(dim),
+                                                                           data_path + "/MNIST/mnist_train_data",
+                                                                           data_path + "/MNIST/mnist_train_labels",
+                                                                           data_path + "/MNIST/mnist_test_data",
+                                                                           data_path + "/MNIST/mnist_test_labels"]).decode(sys.stdout.encoding)
+                                            p = subprocess.Popen(["/usr/bin/time", ti, "./" + str(file) + str(dim),
+                                                               data_path + "/MNIST/mnist_train_data",
+                                                               data_path + "/MNIST/mnist_train_labels",
+                                                               data_path + "/MNIST/mnist_test_data",
+                                                               data_path + "/MNIST/mnist_test_labels"], stdout=DEVNULL, stderr=PIPE)
 
-                                    if fi == 'mnist':
-                                        res = subprocess.check_output(["./"+str(file) + str(dim),
-                                                                       data_path + "/MNIST/mnist_train_data",
-                                                                       data_path + "/MNIST/mnist_train_labels",
-                                                                       data_path + "/MNIST/mnist_test_data",
-                                                                       data_path + "/MNIST/mnist_test_labels"]).decode(sys.stdout.encoding)
-                                        p = subprocess.Popen(["/usr/bin/time", ti, "./" + str(file) + str(dim),
-                                                           data_path + "/MNIST/mnist_train_data",
-                                                           data_path + "/MNIST/mnist_train_labels",
-                                                           data_path + "/MNIST/mnist_test_data",
-                                                           data_path + "/MNIST/mnist_test_labels"], stdout=DEVNULL, stderr=PIPE)
+                                        if fi == 'voicehd':
+                                            res = subprocess.check_output(["./"+str(file) + str(dim),
+                                                                           data_path + "/ISOLET/isolet_train_data",
+                                                                           data_path + "/ISOLET/isolet_train_labels",
+                                                                           data_path + "/ISOLET/isolet_test_data",
+                                                                           data_path + "/ISOLET/isolet_test_labels"]).decode(sys.stdout.encoding)
+                                            p = subprocess.Popen(["/usr/bin/time", ti, "./" + str(file) + str(dim),
+                                                                   data_path + "/ISOLET/isolet_train_data",
+                                                                   data_path + "/ISOLET/isolet_train_labels",
+                                                                   data_path + "/ISOLET/isolet_test_data",
+                                                                   data_path + "/ISOLET/isolet_test_labels"], stdout=DEVNULL, stderr=PIPE)
 
-                                    if fi == 'voicehd':
-                                        res = subprocess.check_output(["./"+str(file) + str(dim),
-                                                                       data_path + "/ISOLET/isolet_train_data",
-                                                                       data_path + "/ISOLET/isolet_train_labels",
-                                                                       data_path + "/ISOLET/isolet_test_data",
-                                                                       data_path + "/ISOLET/isolet_test_labels"]).decode(sys.stdout.encoding)
-                                        p = subprocess.Popen(["/usr/bin/time", ti, "./" + str(file) + str(dim),
-                                                               data_path + "/ISOLET/isolet_train_data",
-                                                               data_path + "/ISOLET/isolet_train_labels",
-                                                               data_path + "/ISOLET/isolet_test_data",
-                                                               data_path + "/ISOLET/isolet_test_labels"], stdout=DEVNULL, stderr=PIPE)
-
-                                    if fi == 'emgp':
-                                        res = subprocess.check_output(["./"+str(file) + str(dim),
-                                             data_path + "/EMG/patient_1_train_data",
-                                             data_path + "/EMG/patient_1_train_labels",
-                                             data_path + "/EMG/patient_1_test_data",
-                                             data_path + "/EMG/patient_1_test_labels"]).decode(sys.stdout.encoding)
-
-                                        p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                        if fi == 'emgp':
+                                            res = subprocess.check_output(["./"+str(file) + str(dim),
                                                  data_path + "/EMG/patient_1_train_data",
                                                  data_path + "/EMG/patient_1_train_labels",
                                                  data_path + "/EMG/patient_1_test_data",
-                                                 data_path + "/EMG/patient_1_test_labels"], stdout=DEVNULL, stderr=PIPE)
+                                                 data_path + "/EMG/patient_1_test_labels"]).decode(sys.stdout.encoding)
 
-                                    if fi == 'emgpp':
-                                        res = subprocess.check_output(
-                                            ["./" + str(file) + str(dim),
-                                             data_path + "/EMG/patient_2_train_data",
-                                             data_path + "/EMG/patient_2_train_labels",
-                                             data_path + "/EMG/patient_2_test_data",
-                                             data_path + "/EMG/patient_2_test_labels"]).decode(sys.stdout.encoding)
+                                            p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                                     data_path + "/EMG/patient_1_train_data",
+                                                     data_path + "/EMG/patient_1_train_labels",
+                                                     data_path + "/EMG/patient_1_test_data",
+                                                     data_path + "/EMG/patient_1_test_labels"], stdout=DEVNULL, stderr=PIPE)
 
-                                        p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                        if fi == 'emgpp':
+                                            res = subprocess.check_output(
+                                                ["./" + str(file) + str(dim),
                                                  data_path + "/EMG/patient_2_train_data",
                                                  data_path + "/EMG/patient_2_train_labels",
                                                  data_path + "/EMG/patient_2_test_data",
-                                                 data_path + "/EMG/patient_2_test_labels"], stdout=DEVNULL, stderr=PIPE)
-                                    if fi == 'emgppp':
-                                        res = subprocess.check_output(
-                                            ["./" + str(file) + str(dim),
-                                             data_path + "/EMG/patient_3_train_data",
-                                             data_path + "/EMG/patient_3_train_labels",
-                                             data_path + "/EMG/patient_3_test_data",
-                                             data_path + "/EMG/patient_3_test_labels"]).decode(sys.stdout.encoding)
+                                                 data_path + "/EMG/patient_2_test_labels"]).decode(sys.stdout.encoding)
 
-                                        p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                            p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                                     data_path + "/EMG/patient_2_train_data",
+                                                     data_path + "/EMG/patient_2_train_labels",
+                                                     data_path + "/EMG/patient_2_test_data",
+                                                     data_path + "/EMG/patient_2_test_labels"], stdout=DEVNULL, stderr=PIPE)
+                                        if fi == 'emgppp':
+                                            res = subprocess.check_output(
+                                                ["./" + str(file) + str(dim),
                                                  data_path + "/EMG/patient_3_train_data",
                                                  data_path + "/EMG/patient_3_train_labels",
                                                  data_path + "/EMG/patient_3_test_data",
-                                                 data_path + "/EMG/patient_3_test_labels"], stdout=DEVNULL, stderr=PIPE)
-                                    if fi == 'emgpppp':
-                                        res = subprocess.check_output(
-                                            ["./" + str(file) + str(dim),
-                                             data_path + "/EMG/patient_4_train_data",
-                                             data_path + "/EMG/patient_4_train_labels",
-                                             data_path + "/EMG/patient_4_test_data",
-                                             data_path + "/EMG/patient_4_test_labels"]).decode(sys.stdout.encoding)
+                                                 data_path + "/EMG/patient_3_test_labels"]).decode(sys.stdout.encoding)
 
-                                        p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                            p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                                     data_path + "/EMG/patient_3_train_data",
+                                                     data_path + "/EMG/patient_3_train_labels",
+                                                     data_path + "/EMG/patient_3_test_data",
+                                                     data_path + "/EMG/patient_3_test_labels"], stdout=DEVNULL, stderr=PIPE)
+                                        if fi == 'emgpppp':
+                                            res = subprocess.check_output(
+                                                ["./" + str(file) + str(dim),
                                                  data_path + "/EMG/patient_4_train_data",
                                                  data_path + "/EMG/patient_4_train_labels",
                                                  data_path + "/EMG/patient_4_test_data",
-                                                 data_path + "/EMG/patient_4_test_labels"], stdout=DEVNULL, stderr=PIPE)
-                                    if fi == 'emgppppp':
-                                        res = subprocess.check_output(
-                                            ["./" + str(file) + str(dim),
-                                             data_path + "/EMG/patient_5_train_data",
-                                             data_path + "/EMG/patient_5_train_labels",
-                                             data_path + "/EMG/patient_5_test_data",
-                                             data_path + "/EMG/patient_5_test_labels"]).decode(sys.stdout.encoding)
+                                                 data_path + "/EMG/patient_4_test_labels"]).decode(sys.stdout.encoding)
 
-                                        p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                            p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                                     data_path + "/EMG/patient_4_train_data",
+                                                     data_path + "/EMG/patient_4_train_labels",
+                                                     data_path + "/EMG/patient_4_test_data",
+                                                     data_path + "/EMG/patient_4_test_labels"], stdout=DEVNULL, stderr=PIPE)
+                                        if fi == 'emgppppp':
+                                            res = subprocess.check_output(
+                                                ["./" + str(file) + str(dim),
                                                  data_path + "/EMG/patient_5_train_data",
                                                  data_path + "/EMG/patient_5_train_labels",
                                                  data_path + "/EMG/patient_5_test_data",
-                                                 data_path + "/EMG/patient_5_test_labels"], stdout=DEVNULL, stderr=PIPE)
-                                    if fi == 'languages':
-                                        res = subprocess.check_output(
-                                            ["./" + str(file) + str(dim),
-                                             data_path + "/LANGUAGES/train_data.txt",
-                                             data_path + "/LANGUAGES/train_labels.txt",
-                                             data_path + "/LANGUAGES/test_data.txt",
-                                             data_path + "/LANGUAGES/test_labels.txt"]).decode(sys.stdout.encoding)
+                                                 data_path + "/EMG/patient_5_test_labels"]).decode(sys.stdout.encoding)
 
-                                        p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                            p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                                     data_path + "/EMG/patient_5_train_data",
+                                                     data_path + "/EMG/patient_5_train_labels",
+                                                     data_path + "/EMG/patient_5_test_data",
+                                                     data_path + "/EMG/patient_5_test_labels"], stdout=DEVNULL, stderr=PIPE)
+                                        if fi == 'languages':
+                                            res = subprocess.check_output(
+                                                ["./" + str(file) + str(dim),
                                                  data_path + "/LANGUAGES/train_data.txt",
                                                  data_path + "/LANGUAGES/train_labels.txt",
                                                  data_path + "/LANGUAGES/test_data.txt",
-                                                 data_path + "/LANGUAGES/test_labels.txt"], stdout=DEVNULL, stderr=PIPE)
-                                    with p.stderr:
-                                        q = deque(iter(p.stderr.readline, b''))
-                                    rc = p.wait()
-                                    #print(str(b''.join(q).decode().strip().split()[40:60]))
+                                                 data_path + "/LANGUAGES/test_labels.txt"]).decode(sys.stdout.encoding)
 
-                                    res = res.replace(' \n', '')
-                                    res += "," + str(type) + "," + str(vectorial) + "," + str(simple) + "," + str(performance)
-                                    if position == 58:
-                                        print(b''.join(q).decode().strip().split())
-                                        res += ","+str(int(b''.join(q).decode().strip().split()[position])*1000)
-                                    else:
-                                        res += ","+b''.join(q).decode().strip().split()[position]
-                                    res += ","+str(threads)+'\n'
-                                    output.writelines(res)
+                                            p = subprocess.Popen(["/usr/bin/time",ti,"./"+str(file) + str(dim),
+                                                     data_path + "/LANGUAGES/train_data.txt",
+                                                     data_path + "/LANGUAGES/train_labels.txt",
+                                                     data_path + "/LANGUAGES/test_data.txt",
+                                                     data_path + "/LANGUAGES/test_labels.txt"], stdout=DEVNULL, stderr=PIPE)
+                                        with p.stderr:
+                                            q = deque(iter(p.stderr.readline, b''))
+                                        rc = p.wait()
+                                        #print(str(b''.join(q).decode().strip().split()[40:60]))
+
+                                        res = res.replace(' \n', '')
+                                        res += "," + str(type) + "," + str(vectorial) + "," + str(simple) + "," + str(performance)
+                                        if position == 58:
+                                            print(b''.join(q).decode().strip().split())
+                                            res += ","+str(int(b''.join(q).decode().strip().split()[position])*1000)
+                                        else:
+                                            res += ","+b''.join(q).decode().strip().split()[position]
+                                        res += ","+str(threads)+'\n'
+                                        output.writelines(res)
+                                except:
+                                    output.writelines("ERROR, TYPE: " + type + " VECTORIAL: " + vectorial + " SIMPLE: " + simple + " PERFORMANCE " + performace)
