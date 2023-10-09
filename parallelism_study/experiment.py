@@ -12,18 +12,21 @@ folder = 'results/'
 
 out_file = sys.argv[1]
 
-dimensions = [128]
+dimensions = [10240]
 #files = ['languages']
 #files = ['mnist', 'languages','voicehd']
-files = ['mnist', 'languages','voicehd', 'emgp']
+#files = ['mnist', 'languages','voicehd', 'emgp']
+files = ['voicehd', 'emgp']
 #train_size = [210032]
 #train_size = [60000, 210032, 6238]
-train_size = [60000, 210032, 6238, 368]
+#train_size = [60000, 210032, 6238, 368]
+train_size = [6238, 368]
 #test_size = [21000]
 #test_size = [10000, 21000, 1559]
-test_size = [10000, 21000, 1559, 158]
+#test_size = [10000, 21000, 1559, 158]
+test_size = [1559, 158]
 vector_size = 128
-num_threads = [1]
+num_threads = [4]
 types = ['PARALLEL']
 vectorials = ['FALSE','TRUE']
 simples = ['TRUE','FALSE']
@@ -60,12 +63,12 @@ for index, file in enumerate(files):
                                     lines = lines[:-8]
 
                                 lines.append('.TYPE ' + str(type) + ';\n')
-                                lines.append('.NAME ' + str(fi).upper() + str(dim).upper() + ';\n')
-                                lines.append('.DIMENSIONS ' + str(dim) + ';\n')
+                                lines.append('.VECTOR_SIZE ' + str(vector_size) + ';\n')
+                                lines.append('.NUM_THREADS ' + str(threads) + ';\n')
                                 lines.append('.TRAIN_SIZE ' + str(train_size[index]) + ';\n')
                                 lines.append('.TEST_SIZE ' + str(test_size[index]) + ';\n')
-                                lines.append('.NUM_THREADS ' + str(threads) + ';\n')
-                                lines.append('.VECTOR_SIZE ' + str(vector_size) + ';\n')
+                                lines.append('.NAME ' + str(fi).upper() + str(dim).upper() + ';\n')
+                                lines.append('.DIMENSIONS ' + str(dim) + ';\n')
                                 lines.append('.SIMPLE ' + simple + ';\n')
                                 lines.append('.VECTORIAL ' + vectorial + ';\n')
                                 lines.append('.PERFORMANCE ' + performance + ';\n')

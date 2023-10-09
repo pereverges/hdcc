@@ -304,8 +304,8 @@ class hdccAST:
             space = 'DIMENSIONS*INPUT_DIM'
         else:
             space = 'DIMENSIONS'
-        if self.multiset == False:
-            space += '*INPUT_DIM'
+            if self.multiset == False:
+                space += '*INPUT_DIM'
         fun_head_train = '''
 void encode_train_task(void* task){'''
 
@@ -353,8 +353,8 @@ void encode_test_task(void* task){'''
             space = 'DIMENSIONS*INPUT_DIM'
         else:
             space = 'DIMENSIONS'
-        if self.multiset == False:
-            space += '*INPUT_DIM'
+            if self.multiset == False:
+                space += '*INPUT_DIM'
         fun_head_train = '''
 void encode_train_task(void* task){'''
 
