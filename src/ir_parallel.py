@@ -1373,27 +1373,22 @@ float* forward(float *a, float* indices){
             with open(self.name.lower() + '.c', 'a') as file:
                 file.write(
                         '''
-float *permute(float* arr, int d, int ini, int fi, float *res)
+void permute(float* arr, int d, int ini, int fi, float * result)
 {
-    float * result = calloc(DIMENSIONS*(fi-ini), sizeof(float));
-
     for (int i = ini; i < fi; i++){
         if (d == 0){
            for (int j = 0; j < DIMENSIONS; j++){
                 result[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+j];
-            }
+            }   
         } else {
-           for (int j = 0; j < DIMENSIONS; j++){
+           for (int j = 0; j < DIMENSIONS-d; j++){
                 result[((i-ini)*DIMENSIONS)+j+d] = arr[(i*DIMENSIONS)+j];
             }
             for (int j = 0; j < d; j++){
                 result[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+DIMENSIONS-d+j];
             }
         }
-
     }
-    res = result;
-    return res;
 }
                         '''
                     )
