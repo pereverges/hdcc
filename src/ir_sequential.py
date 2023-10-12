@@ -914,21 +914,24 @@ f4si *permute''' + str(i) + '''(f4si* arr, int dd, int ini, int fi)
                 '''
 float *permute(float* arr, int d, int ini, int fi, float *res)
 {
+    float * result = calloc(DIMENSIONS*(fi-ini), sizeof(float));
+
     for (int i = ini; i < fi; i++){
         if (d == 0){
            for (int j = 0; j < DIMENSIONS; j++){
-                res[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+j];
+                result[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+j];
             }
         } else {
            for (int j = 0; j < DIMENSIONS; j++){
-                res[((i-ini)*DIMENSIONS)+j+d] = arr[(i*DIMENSIONS)+j];
+                result[((i-ini)*DIMENSIONS)+j+d] = arr[(i*DIMENSIONS)+j];
             }
             for (int j = 0; j < d; j++){
-                res[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+DIMENSIONS-d+j];
+                result[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+DIMENSIONS-d+j];
             }
         }
 
     }
+    res = result;
     return res;
 }
                 '''

@@ -12,27 +12,35 @@ folder = 'results/'
 
 out_file = sys.argv[1]
 
-dimensions = [10240]
+dimensions = [1024]
 #files = ['languages']
 #files = ['mnist', 'languages','voicehd']
 #files = ['mnist', 'languages','voicehd', 'emgp']
-files = ['voicehd', 'emgp']
+files = ['voicehd']
 #train_size = [210032]
 #train_size = [60000, 210032, 6238]
 #train_size = [60000, 210032, 6238, 368]
-train_size = [6238, 368]
+train_size = [6238]
 #test_size = [21000]
 #test_size = [10000, 21000, 1559]
 #test_size = [10000, 21000, 1559, 158]
-test_size = [1559, 158]
+test_size = [1559]
 vector_size = 128
 num_threads = [4]
-types = ['PARALLEL']
+types = ['SEQUENTIAL', 'PARALLEL']
+types = ['SEQUENTIAL']
 vectorials = ['FALSE','TRUE']
+vectorials = ['FALSE']
 simples = ['TRUE','FALSE']
+simples = ['TRUE']
 performances = ['FALSE','TRUE']
+performances = ['FALSE']
 repetitions = 1
 debug = 'TRUE'
+
+#ERROR, TYPE: SEQUENTIAL VECTORIAL: FALSE SIMPLE: TRUE PERFORMANCE FALSE
+#ERROR, TYPE: PARALLEL VECTORIAL: FALSE SIMPLE: FALSE PERFORMANCE FALSE
+# ERROR, TYPE: PARALLEL VECTORIAL: FALSE SIMPLE: FALSE PERFORMANCE TRUE
 
 position = 58
 ti = '-v'
@@ -199,4 +207,4 @@ for index, file in enumerate(files):
                                         output.writelines(res)
                                 except:
                                     with open(folder + out_file + now, "a") as output:
-                                        output.writelines("ERROR, TYPE: " + type + " VECTORIAL: " + vectorial + " SIMPLE: " + simple + " PERFORMANCE " + performance)
+                                        output.writelines("ERROR, TYPE: " + type + " VECTORIAL: " + vectorial + " SIMPLE: " + simple + " PERFORMANCE " + performance + "\n")

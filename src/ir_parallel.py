@@ -1375,21 +1375,24 @@ float* forward(float *a, float* indices){
                         '''
 float *permute(float* arr, int d, int ini, int fi, float *res)
 {
+    float * result = calloc(DIMENSIONS*(fi-ini), sizeof(float));
+
     for (int i = ini; i < fi; i++){
         if (d == 0){
            for (int j = 0; j < DIMENSIONS; j++){
-                res[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+j];
+                result[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+j];
             }
         } else {
            for (int j = 0; j < DIMENSIONS; j++){
-                res[((i-ini)*DIMENSIONS)+j+d] = arr[(i*DIMENSIONS)+j];
+                result[((i-ini)*DIMENSIONS)+j+d] = arr[(i*DIMENSIONS)+j];
             }
             for (int j = 0; j < d; j++){
-                res[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+DIMENSIONS-d+j];
+                result[((i-ini)*DIMENSIONS)+j] = arr[(i*DIMENSIONS)+DIMENSIONS-d+j];
             }
         }
 
     }
+    res = result;
     return res;
 }
                         '''
@@ -1505,6 +1508,259 @@ float *level_hv(int levels){
 }
                         '''
                 )
+
+    def define_circular_hv(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            if self.vectorial:
+                file.write(
+                    '''                 
+f4si *bind_inverse(f4si *a, f4si *b){
+    int k, j;
+    f4si * enc = calloc(DIMENSIONS, sizeof(int));
+    for(j = 0; j < NUM_BATCH; j++){
+        enc[j] = a[j] * -b[j];
+    }
+    return enc;
+}
+void print_matrix_d(f4si* arr, int rows){
+    int i, j;
+    for (int i = 0; i < rows; i++){
+        for(int j = 0; j < NUM_BATCH; j++){
+            for(int k = 0; k < BATCH; k++){
+                printf("%f ", arr[i * NUM_BATCH+j][k]);
+            }
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+
+f4si *circular_hv(int levels){
+    int levels_per_span = levels;
+    int span = 1;
+    f4si *span_hv = random_hv(span+1);
+    f4si *threshold_v = random_vector(span,0,1);
+    f4si *hv = calloc(levels * DIMENSIONS, sizeof(float));
+    f4si *temp_hv = calloc(DIMENSIONS, sizeof(float));
+    f4si* mutation_hv = calloc(DIMENSIONS, sizeof(float));
+
+
+    for(int j = 0; j < NUM_BATCH; j++){
+        mutation_hv[j] = span_hv[j];
+        hv[j] = span_hv[j];
+    }
+
+    f4si** mutation_history = (f4si**)malloc(sizeof(f4si*) * levels);
+    for (int i = 1; i <= levels; i++) {
+        int span_idx = floor(i / levels_per_span);
+
+        if (abs(i - levels_per_span * span_idx) < 1e-12) {
+            for(int j = 0; j < NUM_BATCH; j++){
+                temp_hv[j] = span_hv[j];
+            }
+
+        } else {
+            f4si* span_start_hv = calloc(DIMENSIONS, sizeof(float));
+            f4si* span_end_hv = calloc(DIMENSIONS, sizeof(float));
+            for(int j = 0; j < NUM_BATCH; j++){
+                span_start_hv[j] = span_hv[span_idx * NUM_BATCH+j];
+                span_end_hv[j] = span_hv[(span_idx+1) * NUM_BATCH+j];
+            }
+            float level_within_span = fmod(i, levels_per_span);
+            float t = 1 - (level_within_span / levels_per_span);
+
+            for(int j = 0; j < NUM_BATCH; j++){
+                for(int k = 0; k < BATCH; k++){
+                    temp_hv[j][k] = threshold_v[(span_idx * NUM_BATCH + j)][k] ? span_start_hv[j][k] : span_end_hv[j][k];
+                }
+            }
+        }
+        mutation_history[i - 1] = bind_inverse(temp_hv, mutation_hv);
+
+        for(int j = 0; j < NUM_BATCH; j++){
+            mutation_hv[j] = temp_hv[j];
+        }
+        if (i % 2 == 0) {
+            for(int j = 0; j < NUM_BATCH; j++){
+                int idx = (int)floor(i / 2) * NUM_BATCH + j;
+                hv[idx] = mutation_hv[j];
+            }
+        }
+
+    }
+
+    for (int i = levels + 1; i < levels * 2 - 1; i++) {
+        f4si* mut = mutation_history[i - levels - 1];
+
+        mutation_hv = bind_inverse(mutation_hv, mut);
+
+        if (i % 2 == 0) {
+            for(int j = 0; j < NUM_BATCH; j++){
+                int idx = (int) floor(i / 2) * NUM_BATCH + j;
+                hv[idx] = mutation_hv[j];
+            }
+
+        }
+        free(mut);
+    }
+    free(mutation_history);
+    free(mutation_hv);
+    free(threshold_v);
+    free(span_hv);
+    return hv;
+}
+                        '''
+                )
+            else:
+                file.write(
+                    '''
+
+float *bind_inverse(float *a, float *b){
+    int i, j;
+    float *enc = (float *)calloc(DIMENSIONS, sizeof(int));
+    for(j = 0; j < DIMENSIONS; j++){
+         enc[j] = a[j] * -b[j];
+    }
+    return enc;
+}
+
+float *circular_hv(int levels){
+    int levels_per_span = levels;
+    int span = 1;
+    float *span_hv = random_hv(span+1);
+    float *threshold_v = random_vector(span,0,1);
+    float *hv = calloc(levels * DIMENSIONS, sizeof(float));
+    for (int i = 0; i < DIMENSIONS; i++) {
+        hv[i] = span_hv[i];
+    }
+
+    float *temp_hv = calloc(DIMENSIONS, sizeof(float));
+
+    float* mutation_hv = calloc(DIMENSIONS, sizeof(float));
+    for (int i = 0; i < DIMENSIONS; i++) {
+        mutation_hv[i] = span_hv[i];
+    }
+    float** mutation_history = (float**)malloc(sizeof(float*) * levels);
+    for (int i = 1; i <= levels; i++) {
+        int span_idx = floor(i / levels_per_span);
+
+        if (abs(i - levels_per_span * span_idx) < 1e-12) {
+            for (int j = 0; j < DIMENSIONS; j++) {
+                temp_hv[j] = span_hv[span_idx * DIMENSIONS + j];
+            }
+        } else {
+            float* span_start_hv = calloc(DIMENSIONS, sizeof(float));
+            float* span_end_hv = calloc(DIMENSIONS, sizeof(float));
+
+            for (int j = 0; j < DIMENSIONS; j++) {
+                span_start_hv[j] = span_hv[(span_idx) * DIMENSIONS + j];
+                span_end_hv[j] = span_hv[(span_idx+1) * DIMENSIONS + j];
+            }
+
+            float level_within_span = fmod(i, levels_per_span);
+            float t = 1 - (level_within_span / levels_per_span);
+
+            for (int j = 0; j < DIMENSIONS; j++) {
+                temp_hv[j] = ((threshold_v[(span_idx * DIMENSIONS) + j] < t) ? span_start_hv[j] : span_end_hv[j]);
+            }
+        }
+        // mutation_history[i - 1] = (float*)malloc(sizeof(float) * DIMENSIONS);
+        mutation_history[i - 1] = bind_inverse(temp_hv, mutation_hv);
+
+        for (int j = 0; j < DIMENSIONS; j++) {
+            mutation_hv[j] = temp_hv[j];
+        }
+
+        if (i % 2 == 0) {
+            for (int j = 0; j < DIMENSIONS; j++) {
+                int idx = floor(i / 2) * DIMENSIONS + j;
+                hv[idx] = mutation_hv[j];
+            }
+        }
+    }
+
+    for (int i = levels + 1; i < levels * 2 - 1; i++) {
+        float* mut = mutation_history[i - levels - 1];
+
+        mutation_hv = bind_inverse(mutation_hv, mut);
+
+        if (i % 2 == 0) {
+            for (int j = 0; j < DIMENSIONS; j++) {
+                int idx = floor(i / 2) * DIMENSIONS + j;
+                hv[idx] = mutation_hv[j];
+            }
+        }
+
+        free(mut);
+    }
+
+    free(mutation_history);
+    free(mutation_hv);
+    free(threshold_v);
+    free(span_hv);
+    return hv;
+}
+                        '''
+                )
+
+
+    def define_thermometer_hv(self):
+        with open(self.name.lower() + '.c', 'a') as file:
+            if self.vectorial:
+                file.write(
+                    '''                 
+float *thermometer_hv(int levels){
+    int step = 0;
+    if (levels > 0){
+        step = (int) floor(DIMENSIONS / (levels-1));
+    }
+    float *hv = calloc(levels * DIMENSIONS, sizeof(float));
+
+    int i, j, k;
+    int current_step = step;
+    for(i = 0; i < levels; i++){
+        for(j = 0; j < DIMENSIONS; j++){ 
+            if (j < step){
+                hv[i*DIMENSIONS+j] = 1;
+            } else {
+                hv[i*DIMENSIONS+j] = -1;
+            } 
+        }
+        current_step += step;
+    }
+    return hv;
+}
+                            '''
+                    )
+            else:
+                file.write(
+                        '''
+f4si *thermometer_hv(int levels){
+    int step = 0;
+    if (levels > 0){
+        step = (int) floor(DIMENSIONS / (levels-1));
+    }
+    f4si *hv = calloc(levels * DIMENSIONS, sizeof(float));
+
+    int i, j, k;
+    int current_step = step;
+    for(i = 0; i < levels; i++){
+        for(j = 0; j < NUM_BATCH; j++){
+            for(k = 0; k < BATCH; k++){
+                if ((j*NUM_BATCH) + k < step){
+                    hv[i*NUM_BATCH+j][k] = 1;
+                } else {
+                    hv[i*NUM_BATCH+j][k] = -1;
+                }
+             }
+        }
+        current_step += step;
+    }
+    return hv;
+}
+                        '''
+                    )
+
 
     def define_encoding_function(self):
         with open(self.name.lower() + '.c', 'a') as file:
