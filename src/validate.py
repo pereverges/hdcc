@@ -171,7 +171,10 @@ class hdccAST:
                 if self.vectorial:
                     enc += '\n    enc = permute'+str(i[3])+'(' + b + ',' + str(i[3]) + ',0,1);'
                 else:
-                    enc += '\n    permute(' + b + ',' + str(i[3]) + ',0,1, enc);'
+                    enc += '\n    float * aux = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));'
+                    enc += '\n    permute(' + b + ',' + str(i[3]) + ',0,1, aux);'
+                    enc += '\n    enc = realloc(enc, DIMENSIONS*sizeof(float));'
+                    enc += '\n    enc = aux;'
                 return 'enc', enc, '', ''
             elif i[1] == 'NGRAM':
                 b, enc_aux, _, _ = self.unpack_encoding(i[2], enc)
@@ -239,7 +242,10 @@ class hdccAST:
                 if self.vectorial:
                     enc += '\n    enc = permute'+str(i[3])+'(' + b + ',' + str(i[3]) + ',0,1);'
                 else:
-                    enc += '\n    permute(' + b + ',' + str(i[3]) + ',0,1, enc);'
+                    enc += '\n    float * aux = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));'
+                    enc += '\n    permute(' + b + ',' + str(i[3]) + ',0,1, aux);'
+                    enc += '\n    enc = realloc(enc, DIMENSIONS*sizeof(float));'
+                    enc += '\n    enc = aux;'
                 return 'enc', enc, '', ''
             elif i[1] == 'NGRAM':
                 b, enc_aux, _, _ = self.unpack_encoding_simple(i[2], enc)

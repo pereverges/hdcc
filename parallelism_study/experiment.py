@@ -28,13 +28,13 @@ test_size = [1559]
 vector_size = 128
 num_threads = [4]
 types = ['SEQUENTIAL', 'PARALLEL']
-types = ['SEQUENTIAL']
+#types = ['SEQUENTIAL']
 vectorials = ['FALSE','TRUE']
-vectorials = ['FALSE']
+#vectorials = ['FALSE']
 simples = ['TRUE','FALSE']
-simples = ['TRUE']
+#simples = ['FALSE']
 performances = ['FALSE','TRUE']
-performances = ['FALSE']
+#performances = ['FALSE']
 repetitions = 1
 debug = 'TRUE'
 
