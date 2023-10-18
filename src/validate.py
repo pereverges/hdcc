@@ -246,6 +246,8 @@ class hdccAST:
                     enc += '\n    permute(' + b + ',' + str(i[3]) + ',0,1, aux);'
                     enc += '\n    enc = realloc(enc, DIMENSIONS*sizeof(float));'
                     enc += '\n    enc = aux;'
+                    enc += '\n    free(aux);'
+
                 return 'enc', enc, '', ''
             elif i[1] == 'NGRAM':
                 b, enc_aux, _, _ = self.unpack_encoding_simple(i[2], enc)
