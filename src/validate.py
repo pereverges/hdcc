@@ -242,7 +242,7 @@ class hdccAST:
                 if self.vectorial:
                     enc += '\n    enc = permute'+str(i[3])+'(' + b + ',' + str(i[3]) + ',0,1);'
                 else:
-                    enc += '\n    float * aux = calloc(DIMENSIONS, sizeof(int));'
+                    enc += '\n    float * aux = calloc(DIMENSIONS*INPUT_DIM, sizeof(int));'
                     enc += '\n    permute(' + b + ',' + str(i[3]) + ',0,1, aux);'
                     enc += '\n    enc = realloc(enc, DIMENSIONS*sizeof(float));'
                     enc += '\n    enc = aux;'
