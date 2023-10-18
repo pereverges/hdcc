@@ -1364,6 +1364,7 @@ float* forward(float *a, float* indices){
        }
       }
     }
+    free(arr);
     return res;
 }
                 '''

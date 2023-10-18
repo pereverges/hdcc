@@ -903,6 +903,7 @@ f4si *permute''' + str(i) + '''(f4si* arr, int dd, int ini, int fi)
        }
       }
     }
+    free(arr);
     return res;
 }
                 '''
