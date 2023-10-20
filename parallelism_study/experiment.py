@@ -11,23 +11,27 @@ now = '_hdcc_' + datetime.now().strftime("%d_%m_%Y_%H:%M:%S")
 folder = 'results/'
 
 out_file = sys.argv[1]
-
-dimensions = [1024]
+# ERROR, TYPE: PARALLEL VECTORIAL: TRUE SIMPLE: TRUE PERFORMANCE FALSE
+dimensions = [256]
 #files = ['languages']
 #files = ['mnist', 'languages','voicehd']
 #files = ['mnist', 'languages','voicehd', 'emgp']
-files = ['voicehd']
+files = ['mnist', 'languages','voicehd', 'emgp']
 #train_size = [210032]
 #train_size = [60000, 210032, 6238]
 #train_size = [60000, 210032, 6238, 368]
-train_size = [6238]
+train_size = [60000, 210032, 6238, 368]
 #test_size = [21000]
 #test_size = [10000, 21000, 1559]
 #test_size = [10000, 21000, 1559, 158]
-test_size = [1559]
+test_size = [10000, 21000, 1559, 158]
 vector_size = 128
 num_threads = [4]
-types = ['SEQUENTIAL', 'PARALLEL']
+
+# voicehd,256,2.197224,0.321360,PARALLEL,FALSE,TRUE,FALSE,5154762304,4
+
+# ,PARALLEL,TRUE,TRUE,FALSE,
+types = ['PARALLEL','SEQUENTIAL']
 #types = ['SEQUENTIAL']
 vectorials = ['FALSE','TRUE']
 #vectorials = ['FALSE']
