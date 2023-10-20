@@ -219,13 +219,15 @@ class hdccAST:
                     b1, enc1, _, _ = self.unpack_encoding_simple(i[2],enc)
                     b2, enc2, _, _ = self.unpack_encoding_simple(i[3],enc)
                     enc += enc1 + enc2
-                    enc += '\n    enc = multibind_forward(' + b1 + ',' + b2 + ', indices, enc' + ');'
+                    enc += '\n    enc = forward(' + b2 + ',' + ' indices, enc' + ');'
+                    enc += '\n    enc = multibind(' + b1 + ',enc);'
                     return 'enc', enc, 'bind_forward', [b1,b2]
                 elif i[2] == self.weight:
                     b1, enc1, _, _ = self.unpack_encoding_simple(i[2], enc)
                     b2, enc2, _, _ = self.unpack_encoding_simple(i[3], enc)
                     enc += enc1 + enc2
-                    enc += '\n    enc = multibind_forward(' + b2 + ',' + b1 + ', indices, enc' + ');'
+                    enc += '\n    enc = forward(' + b2 + ',' + ' indices, enc' + ');'
+                    enc += '\n    enc = multiset(' + b1 + ',enc);'
                     return 'enc', enc, 'bind_forward', [b2, b1]
                 else:
                     b1, enc1, _, _ = self.unpack_encoding_simple(i[2],enc)
@@ -258,7 +260,8 @@ class hdccAST:
                     self.ngram = i[3]
                 if i[2] == self.weight:
                     self.multiset = True
-                    enc += '\n    enc = ngram_forward(' + i[2] + ',indices,enc,' + str(i[3]) + ');'
+                    enc += '\n    enc = forward(' + i[2] + ',' + ' indices, enc' + ');'
+                    enc += '\n    enc = ngram(enc,enc,' + str(i[3]) + ');'
                 else:
                     enc += '\n    enc = ngram(' + b + ',enc,' + str(i[3]) + ');'
 

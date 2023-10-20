@@ -462,13 +462,12 @@ void hard_quantize(float *arr, int size){
                     '''
     f4si *multibind(f4si *a, f4si *b){
         int i, j;
-        f4si *enc = (f4si *)calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
         for(i = 0; i < INPUT_DIM; ++i){
             for(j = 0; j < NUM_BATCH; j++){
-                 enc[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[NUM_BATCH + j];
+                 b[(NUM_BATCH * i) + j] = a[(NUM_BATCH * i) + j] * b[(NUM_BATCH * i) + j];
             }
         }
-        return enc;
+        return b;
     }
                     '''
                 )
@@ -477,13 +476,12 @@ void hard_quantize(float *arr, int size){
                     '''
 float *multibind(float *a, float *b){
     int i, j;
-    float *enc = (float *)calloc(DIMENSIONS * INPUT_DIM, sizeof(int));
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < DIMENSIONS; j++){
-             enc[(DIMENSIONS * i) + j] = a[(DIMENSIONS * i) + j] * b[DIMENSIONS + j];
+             b[(DIMENSIONS * i) + j] = a[(DIMENSIONS * i) + j] * b[(DIMENSIONS * i) + j];
         }
     }
-    return enc;
+    return b;
 }
                     '''
                 )
@@ -665,7 +663,8 @@ f4si* ngram_forward(f4si* arr, float* indices, f4si* enc, const int d){
                     '''
 float* ngram_forward(float* arr, float* indices, float* enc, const int d){
     int i, j, k;
-    float* forw = forward(arr,indices);
+    float* forw = calloc(DIMENSIONS * INPUT_DIM, sizeof(float));
+    forw = forward(arr,indices,forw);
     float* res = calloc(DIMENSIONS * (INPUT_DIM-(d-1)), sizeof(float));
     float* sample = calloc(DIMENSIONS * (INPUT_DIM-(d-1)), sizeof(float));
 
@@ -840,9 +839,8 @@ f4si *forward(f4si *a, float* indices, f4si* enc){
             else:
                 file.write(
                     '''
-float* forward(float *a, float* indices){
+float* forward(float *a, float* indices, float* enc){
     int i, j;
-    float* enc = calloc(DIMENSIONS * INPUT_DIM, sizeof(float));
     for(i = 0; i < INPUT_DIM; ++i){
         for(j = 0; j < DIMENSIONS; j++){
            if (indices[i] != padding){
