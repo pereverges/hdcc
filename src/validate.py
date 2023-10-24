@@ -169,7 +169,11 @@ class hdccAST:
                 enc += enc_aux
                 self.permutes += [i[3]]
                 if self.vectorial:
-                    enc += '\n    enc = permute'+str(i[3])+'(' + b + ',' + str(i[3]) + ',0,1);'
+                    if self.performance:
+                        enc += '\n    permute(' + b + ',' + str(i[3]) + ',0,1);'
+                    else:
+                        enc += '\n    enc = permute'+str(i[3])+'(' + b + ',' + str(i[3]) + ',0,1);'
+
                 else:
                     enc += '\n    float * aux = calloc(DIMENSIONS, sizeof(int));'
                     enc += '\n    permute(' + b + ',' + str(i[3]) + ',0,1, aux);'

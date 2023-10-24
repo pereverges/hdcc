@@ -31,7 +31,7 @@ f4si shuffle(f4si arr, int d){
 class SequentialRepresentation:
     def __init__(self, name, classes, dimensions, vars, weight_var, encoding, embeddings, debug, encoding_fun,
                  train_size, test_size, num_threads, vector_size, type, input_dim, high, basic, padding, ngram,
-                 permutes, vectorial):
+                 permutes, vectorial, performance):
         self.name = name
         self.basic_name = self.get_basic_name(name)
         self.classes = classes
@@ -54,6 +54,7 @@ class SequentialRepresentation:
         self.ngram_perm = ngram
         self.permutes = permutes
         self.vectorial = vectorial
+        self.performance = performance
 
     def get_basic_name(self, name):
         temp = len(name)
@@ -863,6 +864,39 @@ float* forward(float *a, float* indices, float* enc){
     return res;
                 '''
         if self.vectorial:
+            if self.performance:
+                with open(self.name.lower() + '.c', 'a') as file:
+                    file.write(
+                        '''
+f4si *permute(f4si* arr, int dd, int ini, int fi)
+{
+    int k, j, i;
+    float last;
+    f4si * res = malloc(VECTOR_SIZE*(dd)* sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+         for(k = 0; k < BATCH; k++){
+            if ((BATCH*j)+k+dd < ((BATCH*NUM_BATCH))){
+                if (k+dd >= BATCH){
+                    int num = (k+dd) % BATCH;
+                    arr[(i-ini)*NUM_BATCH+j+1][num] = arr[i*NUM_BATCH+j][k];
+                    if (k < dd){
+                        res[0][k] = arr[i*NUM_BATCH+j][k];
+                    }
+                } else {
+                    arr[(i-ini)*NUM_BATCH+j][k+dd] = res[0][k-NUM_BATCH+dd];
+                }
+            } else {
+                int num = (k+dd) % BATCH;
+                arr[(i-ini)*NUM_BATCH+j-1][num] = arr[i*NUM_BATCH+j][k];
+            }
+         }
+      }
+    }
+    return arr;
+}
+                        ''')
+
             for i in self.permutes:
                 with open(self.name.lower() + '.c', 'a') as file:
                     file.write(

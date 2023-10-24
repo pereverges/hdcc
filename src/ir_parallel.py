@@ -1327,10 +1327,43 @@ float* forward(float *a, float* indices, float* enc){
         '''
 
         if self.vectorial:
+            if self.performance:
+                with open(self.name.lower() + '.c', 'a') as file:
+                    file.write(
+                '''
+f4si *permute(f4si* arr, int dd, int ini, int fi)
+{
+    int k, j, i;
+    float last;
+    f4si * res = malloc(VECTOR_SIZE*(dd)* sizeof(int));
+    for (i = ini; i < fi; ++i){
+      for (j = 0; j < NUM_BATCH; j++){
+         for(k = 0; k < BATCH; k++){
+            if ((BATCH*j)+k+dd < ((BATCH*NUM_BATCH))){
+                if (k+dd >= BATCH){
+                    int num = (k+dd) % BATCH;
+                    arr[(i-ini)*NUM_BATCH+j+1][num] = arr[i*NUM_BATCH+j][k];
+                    if (k < dd){
+                        res[0][k] = arr[i*NUM_BATCH+j][k];
+                    }
+                } else {
+                    arr[(i-ini)*NUM_BATCH+j][k+dd] = res[0][NUM_BATCH-k+dd];
+                }
+            } else {
+                int num = (k+dd) % BATCH;
+                arr[(i-ini)*NUM_BATCH+j-1][num] = arr[i*NUM_BATCH+j][k];
+            }
+         }
+      }
+    }
+    return arr;
+}
+                ''')
+
             for i in self.permutes:
                 with open(self.name.lower() + '.c', 'a') as file:
                     file.write(
-                        '''
+                            '''
  f4si *permute'''+str(i)+'''(f4si* arr, int dd, int ini, int fi)
 {
 
@@ -1365,9 +1398,9 @@ float* forward(float *a, float* indices, float* enc){
     free(arr);
     return res;
 }
-                '''
+                    '''
 
-            )
+                )
         else:
             with open(self.name.lower() + '.c', 'a') as file:
                 file.write(
